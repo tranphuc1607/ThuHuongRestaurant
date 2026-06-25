@@ -1,0 +1,587 @@
+{
+  "info": {
+    "name": "HR Service",
+    "_postman_id": "hr-service-thuhuong",
+    "description": "API cho quản lý nhân viên, ca làm, chấm công và lương - Nhà hàng Thư Hương",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "admin_token",
+      "value": "",
+      "type": "string",
+      "description": "JWT token của ADMIN (lấy từ POST /api/v1/auth/login)"
+    },
+    {
+      "key": "employee_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "shift_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "attendance_id",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Employees",
+      "item": [
+        {
+          "name": "GET Danh sách nhân viên",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/employees?page=0&size=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "employees"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" },
+                { "key": "search", "value": "", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET Chi tiết nhân viên",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/employees/{{employee_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "employees", "{{employee_id}}"]
+            }
+          }
+        },
+        {
+          "name": "POST Tạo nhân viên (PART_TIME - lương giờ)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Nguyễn Văn A\",\n  \"phone\": \"0901234567\",\n  \"type\": \"PART_TIME\",\n  \"salaryType\": \"HOURLY\",\n  \"baseValue\": 25000,\n  \"targetDays\": null\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/employees",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "employees"]
+            }
+          }
+        },
+        {
+          "name": "POST Tạo nhân viên (FULL_TIME - lương tháng)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Trần Thị B\",\n  \"phone\": \"0987654321\",\n  \"type\": \"FULL_TIME\",\n  \"salaryType\": \"FIXED\",\n  \"baseValue\": 6000000,\n  \"targetDays\": 26\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/employees",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "employees"]
+            }
+          }
+        },
+        {
+          "name": "PUT Cập nhật nhân viên",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Nguyễn Văn A (sửa)\",\n  \"phone\": \"0901234567\",\n  \"type\": \"PART_TIME\",\n  \"salaryType\": \"HOURLY\",\n  \"baseValue\": 30000,\n  \"targetDays\": null\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/employees/{{employee_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "employees", "{{employee_id}}"]
+            }
+          }
+        },
+        {
+          "name": "PATCH Vô hiệu hóa nhân viên",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/employees/{{employee_id}}/deactivate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "employees", "{{employee_id}}", "deactivate"]
+            }
+          }
+        },
+        {
+          "name": "PATCH Kích hoạt lại nhân viên",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/employees/{{employee_id}}/activate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "employees", "{{employee_id}}", "activate"]
+            }
+          }
+        },
+        {
+          "name": "PATCH Link Telegram cho nhân viên",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"telegramId\": 123456789\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/employees/{{employee_id}}/link-telegram",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "employees", "{{employee_id}}", "link-telegram"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Shifts - Ca làm việc",
+      "item": [
+        {
+          "name": "GET Danh sách ca",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/shifts",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "shifts"]
+            }
+          }
+        },
+        {
+          "name": "GET Chi tiết ca",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/shifts/{{shift_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "shifts", "{{shift_id}}"]
+            }
+          }
+        },
+        {
+          "name": "POST Tạo ca sáng",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ca sáng\",\n  \"startTime\": \"07:00\",\n  \"endTime\": \"12:00\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/shifts",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "shifts"]
+            }
+          }
+        },
+        {
+          "name": "POST Tạo ca chiều",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ca chiều\",\n  \"startTime\": \"12:00\",\n  \"endTime\": \"17:00\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/shifts",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "shifts"]
+            }
+          }
+        },
+        {
+          "name": "POST Tạo ca tối",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ca tối\",\n  \"startTime\": \"17:00\",\n  \"endTime\": \"22:00\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/shifts",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "shifts"]
+            }
+          }
+        },
+        {
+          "name": "POST Tạo ca đêm (xuyên đêm)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ca đêm\",\n  \"startTime\": \"22:00\",\n  \"endTime\": \"06:00\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/shifts",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "shifts"]
+            }
+          }
+        },
+        {
+          "name": "PUT Cập nhật ca",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ca sáng (sửa)\",\n  \"startTime\": \"06:30\",\n  \"endTime\": \"12:00\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/shifts/{{shift_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "shifts", "{{shift_id}}"]
+            }
+          }
+        },
+        {
+          "name": "DELETE Vô hiệu hóa ca",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/shifts/{{shift_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "shifts", "{{shift_id}}"]
+            }
+          }
+        },
+        {
+          "name": "POST Phân ca cho nhân viên",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employeeId\": 1,\n  \"shiftId\": 1,\n  \"daysOfWeek\": [\"MONDAY\", \"TUESDAY\", \"WEDNESDAY\", \"THURSDAY\", \"FRIDAY\"],\n  \"effectiveFrom\": \"2026-06-25\",\n  \"effectiveTo\": null\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/shifts/assign",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "shifts", "assign"]
+            }
+          }
+        },
+        {
+          "name": "GET Lịch ca của nhân viên",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/shifts/assignments?employeeId={{employee_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "shifts", "assignments"],
+              "query": [
+                { "key": "employeeId", "value": "{{employee_id}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET Lịch tuần (tuần này)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/shifts/schedule?weekOffset=0",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "shifts", "schedule"],
+              "query": [
+                { "key": "weekOffset", "value": "0", "description": "0=tuần này, 1=tuần sau, -1=tuần trước" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Attendance - Chấm công",
+      "item": [
+        {
+          "name": "GET Danh sách chấm công (tháng này)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/attendance?page=0&size=50",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "attendance"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "50" },
+                { "key": "employeeId", "value": "1", "disabled": true },
+                { "key": "month", "value": "6", "disabled": true },
+                { "key": "year", "value": "2026", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET Chấm công theo nhân viên + tháng",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/attendance?employeeId={{employee_id}}&month=6&year=2026&page=0&size=50",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "attendance"],
+              "query": [
+                { "key": "employeeId", "value": "{{employee_id}}" },
+                { "key": "month", "value": "6" },
+                { "key": "year", "value": "2026" },
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "50" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET Chi tiết chấm công",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/attendance/{{attendance_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "attendance", "{{attendance_id}}"]
+            }
+          }
+        },
+        {
+          "name": "PATCH Sửa giờ check-in thủ công",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"field\": \"checkInTime\",\n  \"newTime\": \"2026-06-25T00:00:00Z\",\n  \"reason\": \"Nhân viên quên bấm, admin xác nhận\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/attendance/{{attendance_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "attendance", "{{attendance_id}}"]
+            }
+          }
+        },
+        {
+          "name": "PATCH Sửa giờ check-out thủ công",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"field\": \"checkOutTime\",\n  \"newTime\": \"2026-06-25T05:00:00Z\",\n  \"reason\": \"Nhân viên quên bấm check-out\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/attendance/{{attendance_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "attendance", "{{attendance_id}}"]
+            }
+          }
+        },
+        {
+          "name": "POST Đánh dấu phạt",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 50000,\n  \"reason\": \"Đi muộn 30 phút không báo trước\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/attendance/{{attendance_id}}/punish",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "attendance", "{{attendance_id}}", "punish"]
+            }
+          }
+        },
+        {
+          "name": "DELETE Xóa phạt",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/attendance/{{attendance_id}}/punish",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "attendance", "{{attendance_id}}", "punish"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payroll - Lương",
+      "item": [
+        {
+          "name": "GET Bảng lương toàn bộ (tháng này)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/payroll",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "payroll"],
+              "query": [
+                { "key": "month", "value": "6", "disabled": true },
+                { "key": "year", "value": "2026", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET Bảng lương toàn bộ (tháng cụ thể)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/payroll?month=6&year=2026",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "payroll"],
+              "query": [
+                { "key": "month", "value": "6" },
+                { "key": "year", "value": "2026" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET Lương của một nhân viên",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/payroll/{{employee_id}}?month=6&year=2026",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "payroll", "{{employee_id}}"],
+              "query": [
+                { "key": "month", "value": "6" },
+                { "key": "year", "value": "2026" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Verify - Check-in WiFi (Public)",
+      "item": [
+        {
+          "name": "GET Xác minh check-in (test - không cần token)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/verify?token=PASTE_TOKEN_HERE",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "verify"],
+              "query": [
+                { "key": "token", "value": "PASTE_TOKEN_HERE", "description": "Token lấy từ link nút check-in trong Telegram" }
+              ]
+            },
+            "description": "Endpoint public - bot Telegram sinh link này. Khi nhân viên bấm nút trong Telegram, browser mở URL này. Server kiểm tra IP và ghi chấm công."
+          }
+        }
+      ]
+    }
+  ]
+}

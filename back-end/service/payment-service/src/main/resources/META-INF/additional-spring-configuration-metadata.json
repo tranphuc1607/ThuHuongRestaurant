@@ -1,0 +1,24 @@
+{
+  "properties": [
+    {
+      "name": "sepay.webhook.apikey",
+      "type": "java.lang.String",
+      "description": "API key xác thực webhook từ Sepay (lấy từ Sepay dashboard)."
+    },
+    {
+      "name": "sepay.webhook.allowed-ips",
+      "type": "java.lang.String",
+      "description": "Danh sách IP được phép gọi webhook, ngăn cách bằng dấu phẩy. Dùng '*' để tắt kiểm tra IP (chỉ dùng khi dev/test)."
+    },
+    {
+      "name": "telegram.bot.token",
+      "type": "java.lang.String",
+      "description": "Token của Telegram Bot (lấy từ BotFather). Để trống để tắt thông báo Telegram."
+    },
+    {
+      "name": "telegram.bot.chat-id",
+      "type": "java.lang.String",
+      "description": "Chat ID của group/channel nhân viên nhận thông báo. Để trống để tắt thông báo Telegram."
+    }
+  ]
+}
