@@ -58,7 +58,7 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
       return;
     }
     if (user.role !== "ROLE_EMPLOYEE" && user.role !== "ROLE_ADMIN") {
-      router.push("/");
+      router.push("/unauthorized");
     }
   }, [user, loading, router]);
 

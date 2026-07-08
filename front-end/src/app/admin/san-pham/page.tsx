@@ -1,18 +1,25 @@
-﻿"use client";
-import { useState, useEffect, useCallback } from "react";
+"use client";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { getAuthHeaders } from "@/lib/auth";
 import { formatPrice } from "@/lib/utils";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api/v1";
 
-const CATEGORY_LABELS: Record<string, string> = {
-  CHICKEN: "Gà", PORK: "Heo", BEEF: "Bò", FISH: "Cá",
-  VEGETABLE: "Rau", DRINK_FOOD: "Đồ ăn kèm", DRINK: "Đồ uống", OTHER: "Khác",
-};
+const CATEGORIES: { value: string; label: string; icon: string }[] = [
+  { value: "",           label: "Tất cả",      icon: "🍽️" },
+  { value: "CHICKEN",   label: "Gà",           icon: "🍗" },
+  { value: "PORK",      label: "Heo",          icon: "🥩" },
+  { value: "BEEF",      label: "Bò",           icon: "🐄" },
+  { value: "FISH",      label: "Cá & Hải sản", icon: "🐟" },
+  { value: "VEGETABLE", label: "Rau",          icon: "🥦" },
+  { value: "DRINK_FOOD",label: "Ăn kèm",       icon: "🧆" },
+  { value: "DRINK",     label: "Đồ uống",      icon: "🥤" },
+  { value: "OTHER",     label: "Khác",         icon: "📦" },
+];
 
 const STATUS_STYLE: Record<string, string> = {
-  AVAILABLE: "bg-green-100 text-green-700",
+  AVAILABLE:    "bg-green-100 text-green-700",
   OUT_OF_STOCK: "bg-red-100 text-red-600",
 };
 
@@ -21,142 +28,349 @@ interface Product {
   imageUrl?: string; description?: string;
 }
 
-export default function AdminProductsPage() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
-  const [search, setSearch] = useState("");
-  const [searchInput, setSearchInput] = useState("");
-  const [catFilter, setCatFilter] = useState("");
-  const [actionLoading, setActionLoading] = useState<number | null>(null);
-  const [toast, setToast] = useState("");
-  const [error, setError] = useState("");
+// Đọc trạng thái đã lưu khi navigate back
+function readNavState(): { cat: string; page: number; scroll: number } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem("admin-products-nav");
+    if (!raw) return null;
+    sessionStorage.removeItem("admin-products-nav"); // dùng 1 lần rồi xóa
+    return JSON.parse(raw);
+  } catch { return null; }
+}
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
+export default function AdminProductsPage() {
+  // Khởi tạo state từ sessionStorage ngay lần đầu render (lazy initializer)
+  const [navRestored]              = useState(() => readNavState());
+  const [catFilter,  setCatFilter] = useState(navRestored?.cat  ?? "");
+  const [page,       setPage]      = useState(navRestored?.page ?? 0);
+  const pendingScroll               = useRef(navRestored?.scroll ?? 0);
+
+  const [products,      setProducts]      = useState<Product[]>([]);
+  const [loading,       setLoading]       = useState(true);
+  const [refreshing,    setRefreshing]    = useState(false);
+  const [totalPages,    setTotalPages]    = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+  const [search,        setSearch]        = useState("");
+  const [searchInput,   setSearchInput]   = useState("");
+  const [actionLoading, setActionLoading] = useState<number | null>(null);
+  const [toast,         setToast]         = useState<{ msg: string; ok: boolean } | null>(null);
+  const savedScroll = useRef(0);
+
+  function showToast(msg: string, ok = true) {
+    setToast({ msg, ok });
+    setTimeout(() => setToast(null), 3000);
+  }
+
+  // Lưu trạng thái vào sessionStorage trước khi navigate sang trang edit
+  function saveNavState() {
+    try {
+      const el = document.getElementById("admin-scroll-content");
+      sessionStorage.setItem("admin-products-nav", JSON.stringify({
+        cat:    catFilter,
+        page,
+        scroll: el ? el.scrollTop : window.scrollY,
+      }));
+    } catch { /* ignore */ }
+  }
+
+  const load = useCallback(async (preserveScroll = false) => {
+    if (preserveScroll) {
+      const el = document.getElementById("admin-scroll-content");
+      savedScroll.current = el ? el.scrollTop : window.scrollY;
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     try {
       let url: string;
       if (search.trim()) {
-        url = `${BASE}/products/search?keyword=${encodeURIComponent(search)}&page=${page}&size=15`;
+        url = `${BASE}/products/search?keyword=${encodeURIComponent(search)}&page=${page}&size=16`;
       } else {
-        const params = new URLSearchParams({ page: String(page), size: "15" });
+        const params = new URLSearchParams({ page: String(page), size: "16" });
         if (catFilter) params.set("category", catFilter);
         url = `${BASE}/products?${params}`;
       }
-      const res = await fetch(url, { headers: getAuthHeaders() });
+      const res  = await fetch(url, { headers: getAuthHeaders() });
       const json = await res.json();
       if (res.ok && (json.statusCode === 200 || json.data)) {
         setProducts(json.data?.content ?? json.data ?? []);
         setTotalPages(json.data?.totalPages ?? 1);
-      } else {
-        setError(`Lỗi ${res.status}: ${json.message ?? json.error ?? "Không tải được dữ liệu"}`);
+        setTotalElements(json.data?.totalElements ?? 0);
       }
-    } catch (e) {
-      setError(`Không kết nối được: ${e}`);
-    } finally { setLoading(false); }
+    } catch { /* ignore */ }
+    finally {
+      setLoading(false);
+      setRefreshing(false);
+
+      // Ưu tiên: khôi phục từ navigate back
+      if (pendingScroll.current > 0) {
+        const scroll = pendingScroll.current;
+        pendingScroll.current = 0;
+        setTimeout(() => {
+          const el = document.getElementById("admin-scroll-content");
+          if (el) el.scrollTop = scroll;
+          else window.scrollTo(0, scroll);
+        }, 50);
+      } else if (preserveScroll) {
+        // Khôi phục sau xóa / action
+        setTimeout(() => {
+          const el = document.getElementById("admin-scroll-content");
+          if (el) el.scrollTop = savedScroll.current;
+          else window.scrollTo(0, savedScroll.current);
+        }, 30);
+      }
+    }
   }, [page, search, catFilter]);
 
   useEffect(() => { load(); }, [load]);
-
-  function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(""), 3000); }
 
   async function deleteProduct(id: number, name: string) {
     if (!confirm(`Xóa sản phẩm "${name}"?`)) return;
     setActionLoading(id);
     try {
-      const res = await fetch(`${BASE}/products/${id}`, { method: "DELETE", headers: getAuthHeaders() });
+      const res  = await fetch(`${BASE}/products/${id}`, { method: "DELETE", headers: getAuthHeaders() });
       const json = await res.json();
-      if (res.ok) { showToast("Đã xóa sản phẩm"); load(); }
-      else showToast(json.message ?? "Thất bại");
+      if (res.ok) { showToast("Đã xóa sản phẩm"); load(true); }
+      else showToast(json.message ?? "Thất bại", false);
     } finally { setActionLoading(null); }
   }
 
+  function handleSearch(e: React.FormEvent) {
+    e.preventDefault();
+    setPage(0);
+    setSearch(searchInput);
+  }
+
+  function clearSearch() {
+    setSearch(""); setSearchInput(""); setPage(0);
+  }
+
+  function selectCat(val: string) {
+    setCatFilter(val);
+    setPage(0);
+    setSearch(""); setSearchInput("");
+  }
+
   return (
-    <div className="p-6">
+    <div className="p-3 md:p-6">
+      {/* Toast */}
       {toast && (
-        <div className="fixed top-4 right-4 bg-gray-800 text-white text-sm px-4 py-2.5 rounded shadow-lg z-50">{toast}</div>
+        <div className={`fixed top-16 left-1/2 -translate-x-1/2 md:top-4 md:right-4 md:left-auto md:translate-x-0 z-50 text-sm px-4 py-2.5 rounded-xl shadow-lg text-white font-semibold whitespace-nowrap
+          ${toast.ok ? "bg-gray-800" : "bg-red-500"}`}>
+          {toast.msg}
+        </div>
       )}
 
-      <div className="flex items-center justify-between mb-5">
+      {/* Header */}
+      <div className="flex items-start justify-between mb-4">
         <div>
-          <h1 className="text-xl font-bold text-ink">Quản lý Sản phẩm</h1>
-          <p className="text-sm text-muted">Thêm, sửa, xóa món ăn</p>
+          <h1 className="text-lg md:text-xl font-bold text-ink">Quản lý Sản phẩm</h1>
+          <p className="text-xs md:text-sm text-muted mt-0.5">
+            {!loading && !refreshing && `${totalElements} sản phẩm`}
+          </p>
         </div>
         <Link href="/admin/san-pham/moi"
-          className="px-4 py-2 bg-primary text-white text-sm font-semibold rounded hover:bg-primary-dark">
+          className="px-3 py-1.5 md:px-4 md:py-2 bg-primary text-white text-xs md:text-sm font-bold rounded-xl hover:bg-primary-dark transition-colors whitespace-nowrap touch-manipulation"
+          style={{ WebkitTapHighlightColor: "transparent" }}>
           + Thêm món
         </Link>
       </div>
 
-      {/* Search + Filter */}
-      <div className="flex gap-3 mb-4 flex-wrap">
-        <form onSubmit={(e) => { e.preventDefault(); setPage(0); setSearch(searchInput); }} className="flex gap-2">
+      {/* Search bar */}
+      <form onSubmit={handleSearch} className="flex gap-2 mb-3">
+        <div className="relative flex-1">
           <input
-            value={searchInput} onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Tìm theo tên..."
-            className="border border-hairline px-3 py-1.5 text-sm outline-none focus:border-primary rounded w-52"
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
+            placeholder="Tìm theo tên món..."
+            className="w-full border border-hairline pl-3 pr-8 py-2 text-sm rounded-xl outline-none focus:border-primary bg-white"
           />
-          <button type="submit" className="px-3 py-1.5 bg-canvas text-sm rounded hover:bg-surface-card">Tìm</button>
-          {search && (
-            <button type="button" onClick={() => { setSearch(""); setSearchInput(""); setPage(0); }}
-              className="px-3 py-1.5 text-xs text-muted hover:text-ink">✕ Xóa</button>
+          {searchInput && (
+            <button type="button" onClick={clearSearch}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-soft hover:text-ink text-base leading-none">
+              ×
+            </button>
           )}
-        </form>
-        <select value={catFilter} onChange={(e) => { setCatFilter(e.target.value); setPage(0); }}
-          className="border border-hairline px-3 py-1.5 text-sm outline-none focus:border-primary rounded">
-          <option value="">Tất cả danh mục</option>
-          {Object.entries(CATEGORY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
+        </div>
+        <button type="submit"
+          className="px-4 py-2 bg-ink text-canvas text-sm font-semibold rounded-xl hover:bg-ink/80 transition-colors touch-manipulation"
+          style={{ WebkitTapHighlightColor: "transparent" }}>
+          Tìm
+        </button>
+      </form>
+
+      {/* Category pills — horizontal scroll on mobile */}
+      <div className="overflow-x-auto -mx-3 px-3 md:mx-0 md:px-0 mb-4 pb-1">
+        <div className="flex gap-1.5 min-w-max md:flex-wrap md:min-w-0">
+          {CATEGORIES.map(cat => (
+            <button key={cat.value}
+              onClick={() => selectCat(cat.value)}
+              className={`flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors whitespace-nowrap touch-manipulation ${
+                catFilter === cat.value
+                  ? "bg-primary text-white border-primary"
+                  : "bg-white text-muted border-hairline hover:border-primary/40"
+              }`}
+              style={{ WebkitTapHighlightColor: "transparent" }}>
+              <span>{cat.icon}</span>
+              <span>{cat.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="bg-canvas rounded-lg border border-hairline overflow-hidden">
+      {/* ── Mobile: Danh sách ── */}
+      <div className="block md:hidden">
+        {refreshing && (
+          <div className="h-0.5 bg-hairline rounded-full overflow-hidden -mx-3 mb-3">
+            <div className="h-full bg-primary rounded-full animate-pulse w-1/2 mx-auto" />
+          </div>
+        )}
+
+        {loading && !refreshing ? (
+          <div className="space-y-2.5">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="bg-white rounded-2xl border border-hairline p-3 flex items-center gap-3 animate-pulse">
+                <div className="w-16 h-16 flex-shrink-0 rounded-xl bg-surface-card" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3.5 bg-surface-card rounded w-2/3" />
+                  <div className="h-3 bg-surface-card rounded w-1/3" />
+                  <div className="h-3 bg-surface-card rounded w-1/2" />
+                </div>
+                <div className="flex flex-col gap-1.5 flex-shrink-0">
+                  <div className="w-12 h-7 bg-surface-card rounded-xl" />
+                  <div className="w-12 h-7 bg-surface-card rounded-xl" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : products.length === 0 ? (
+          <div className="py-16 text-center text-muted-soft text-sm">
+            {search ? `Không tìm thấy "${search}"` : "Không có sản phẩm nào"}
+          </div>
+        ) : (
+          <div className="space-y-2.5">
+            {products.map(p => {
+              const catMeta = CATEGORIES.find(c => c.value === p.category);
+              return (
+                <div key={p.id}
+                  className="bg-white rounded-2xl border border-hairline overflow-hidden flex items-center gap-3 p-3">
+                  {/* Ảnh bên trái */}
+                  <div className="w-16 h-16 flex-shrink-0 rounded-xl overflow-hidden bg-surface-card">
+                    {p.imageUrl ? (
+                      <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-2xl">
+                        {catMeta?.icon ?? "🍜"}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Info giữa */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-ink truncate">{p.name}</p>
+                    <p className="text-xs text-muted mt-0.5">{catMeta?.icon} {catMeta?.label ?? p.category}</p>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <span className="text-sm font-black text-primary">{formatPrice(p.price)}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${STATUS_STYLE[p.status] ?? "bg-canvas text-muted"}`}>
+                        {p.status === "AVAILABLE" ? "Có sẵn" : "Hết hàng"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Nút bên phải */}
+                  <div className="flex flex-col gap-1.5 flex-shrink-0">
+                    <Link
+                      href={`/admin/san-pham/${p.id}`}
+                      onClick={saveNavState}
+                      className="px-3.5 py-1.5 text-center text-xs font-semibold bg-blue-50 text-blue-600 rounded-xl touch-manipulation"
+                      style={{ WebkitTapHighlightColor: "transparent" }}>
+                      Sửa
+                    </Link>
+                    <button
+                      onClick={() => deleteProduct(p.id, p.name)}
+                      disabled={actionLoading === p.id}
+                      onPointerDown={e => { if (e.pointerType === "touch") { e.preventDefault(); deleteProduct(p.id, p.name); } }}
+                      className="px-3.5 py-1.5 text-xs font-semibold bg-red-50 text-red-500 rounded-xl disabled:opacity-50 touch-manipulation"
+                      style={{ WebkitTapHighlightColor: "transparent" }}>
+                      {actionLoading === p.id ? "..." : "Xóa"}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Pagination mobile */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-4 pt-4 pb-4">
+            <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
+              className="px-5 py-2.5 text-sm border border-hairline rounded-xl disabled:opacity-40 bg-white touch-manipulation"
+              style={{ WebkitTapHighlightColor: "transparent" }}>
+              ←
+            </button>
+            <span className="text-sm text-muted">{page + 1} / {totalPages}</span>
+            <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
+              className="px-5 py-2.5 text-sm border border-hairline rounded-xl disabled:opacity-40 bg-white touch-manipulation"
+              style={{ WebkitTapHighlightColor: "transparent" }}>
+              →
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ── Desktop: Table ── */}
+      <div className={`hidden md:block bg-canvas rounded-xl border border-hairline overflow-hidden transition-opacity ${refreshing ? "opacity-70" : ""}`}>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-surface-soft border-b border-hairline text-xs text-muted uppercase">
-                <th className="text-left px-4 py-3">Ảnh</th>
-                <th className="text-left px-4 py-3">Tên món</th>
-                <th className="text-left px-4 py-3">Danh mục</th>
-                <th className="text-right px-4 py-3">Giá</th>
-                <th className="text-center px-4 py-3">Trạng thái</th>
-                <th className="text-center px-4 py-3">Thao tác</th>
+              <tr className="bg-surface-soft border-b border-hairline text-xs text-muted uppercase tracking-wide">
+                <th className="text-left px-4 py-3 font-semibold">Ảnh</th>
+                <th className="text-left px-4 py-3 font-semibold">Tên món</th>
+                <th className="text-left px-4 py-3 font-semibold">Danh mục</th>
+                <th className="text-right px-4 py-3 font-semibold">Giá</th>
+                <th className="text-center px-4 py-3 font-semibold">Trạng thái</th>
+                <th className="text-center px-4 py-3 font-semibold">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-hairline">
-              {loading ? (
-                <tr><td colSpan={6} className="text-center py-8 text-muted-soft">Đang tải...</td></tr>
-              ) : error ? (
-                <tr><td colSpan={6} className="text-center py-8 text-red-500 text-xs">{error}</td></tr>
+              {loading && !refreshing ? (
+                <tr><td colSpan={6} className="text-center py-10 text-muted-soft animate-pulse">Đang tải...</td></tr>
               ) : products.length === 0 ? (
-                <tr><td colSpan={6} className="text-center py-8 text-muted-soft">Không có sản phẩm nào</td></tr>
-              ) : products.map((p) => (
+                <tr><td colSpan={6} className="text-center py-10 text-muted-soft">
+                  {search ? `Không tìm thấy "${search}"` : "Không có sản phẩm nào"}
+                </td></tr>
+              ) : products.map(p => (
                 <tr key={p.id} className="hover:bg-surface-soft">
                   <td className="px-4 py-2.5">
                     {p.imageUrl ? (
-                      <img src={p.imageUrl} alt={p.name} className="w-12 h-10 object-cover rounded" />
+                      <img src={p.imageUrl} alt={p.name} className="w-12 h-10 object-cover rounded-lg" />
                     ) : (
-                      <div className="w-12 h-10 bg-canvas rounded flex items-center justify-center text-lg">🍜</div>
+                      <div className="w-12 h-10 bg-canvas rounded-lg flex items-center justify-center text-xl">
+                        {CATEGORIES.find(c => c.value === p.category)?.icon ?? "🍜"}
+                      </div>
                     )}
                   </td>
                   <td className="px-4 py-2.5 font-medium text-ink">{p.name}</td>
-                  <td className="px-4 py-2.5 text-muted">{CATEGORY_LABELS[p.category] ?? p.category}</td>
-                  <td className="px-4 py-2.5 text-right font-semibold">{formatPrice(p.price)}</td>
+                  <td className="px-4 py-2.5 text-muted">
+                    {CATEGORIES.find(c => c.value === p.category)?.label ?? p.category}
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-semibold text-primary">{formatPrice(p.price)}</td>
                   <td className="px-4 py-2.5 text-center">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_STYLE[p.status] ?? "bg-canvas text-muted"}`}>
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${STATUS_STYLE[p.status] ?? "bg-canvas text-muted"}`}>
                       {p.status === "AVAILABLE" ? "Có sẵn" : p.status === "OUT_OF_STOCK" ? "Hết hàng" : p.status}
                     </span>
                   </td>
                   <td className="px-4 py-2.5">
-                    <div className="flex items-center justify-center gap-1">
-                      <Link href={`/admin/san-pham/${p.id}`}
-                        className="px-2 py-1 bg-blue-50 text-blue-600 text-xs rounded hover:bg-blue-100">
+                    <div className="flex items-center justify-center gap-1.5">
+                      <Link href={`/admin/san-pham/${p.id}`} onClick={saveNavState}
+                        className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-semibold rounded-lg hover:bg-blue-100 transition-colors">
                         Sửa
                       </Link>
                       <button onClick={() => deleteProduct(p.id, p.name)} disabled={actionLoading === p.id}
-                        className="px-2 py-1 bg-red-50 text-red-500 text-xs rounded hover:bg-red-100 disabled:opacity-50">
-                        Xóa
+                        className="px-3 py-1 bg-red-50 text-red-500 text-xs font-semibold rounded-lg hover:bg-red-100 disabled:opacity-50 transition-colors">
+                        {actionLoading === p.id ? "..." : "Xóa"}
                       </button>
                     </div>
                   </td>
@@ -165,13 +379,19 @@ export default function AdminProductsPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination desktop */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 p-4 border-t border-hairline">
+          <div className="flex items-center justify-center gap-3 p-4 border-t border-hairline bg-surface-soft">
             <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
-              className="px-3 py-1 text-sm border rounded disabled:opacity-40 hover:bg-surface-soft">← Trước</button>
-            <span className="text-sm text-gray-600">Trang {page + 1} / {totalPages}</span>
+              className="px-3 py-1.5 text-sm border border-hairline rounded-lg disabled:opacity-40 hover:bg-canvas transition-colors">
+              ← Trước
+            </button>
+            <span className="text-sm text-muted">Trang {page + 1} / {totalPages}</span>
             <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
-              className="px-3 py-1 text-sm border rounded disabled:opacity-40 hover:bg-surface-soft">Tiếp →</button>
+              className="px-3 py-1.5 text-sm border border-hairline rounded-lg disabled:opacity-40 hover:bg-canvas transition-colors">
+              Tiếp →
+            </button>
           </div>
         )}
       </div>

@@ -45,7 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const res = await fetch(`${BASE_URL}/users/me`, {
         headers: { Authorization: `Bearer ${token}` },
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(4000),
       });
       if (!res.ok) return false;
       const json = await res.json();
@@ -64,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await fetch(`${BASE_URL}/auth/refresh`, {
         method: "POST",
         credentials: "include",
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(4000),
       });
       const json = await res.json();
       if (json.statusCode === 200) {

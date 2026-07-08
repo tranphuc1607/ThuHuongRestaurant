@@ -29,6 +29,9 @@ public class AuthService {
     @Value("${app.jwt.refresh-token-validity-in-seconds}")
     private long refreshTokenExpiration;
 
+    @Value("${app.security.cookie.secure:false}")
+    private boolean cookieSecure;
+
     @Value("${app.security.jwt.expiration}")
     private long accessTokenExpiration ;
 
@@ -69,7 +72,7 @@ public ResponseEntity<LoginResponse> login(LoginRequest loginDto) throws Message
 
     ResponseCookie resCookie = createHttpOnlyCookie("refresh_token", refreshToken, refreshTokenExpiration);
 
-    LoginResponse loginResponse = buildLoginResponse(accessToken, refreshToken, auth);
+    LoginResponse loginResponse = buildLoginResponse(accessToken, auth);
 
     return ResponseEntity.ok()
             .header(HttpHeaders.SET_COOKIE, resCookie.toString())
@@ -104,7 +107,7 @@ public ResponseEntity<LoginResponse> refreshToken(String refreshToken) throws Me
 
     return ResponseEntity.ok()
             .header(HttpHeaders.SET_COOKIE, resCookie.toString())
-            .body(buildLoginResponse(newAccessToken, newRefreshToken, auth));
+            .body(buildLoginResponse(newAccessToken, auth));
 }
    @Transactional
 public ResponseEntity<?> logout(String refreshToken) {
@@ -126,24 +129,23 @@ public ResponseEntity<?> logout(String refreshToken) {
     private ResponseCookie createHttpOnlyCookie(String name, String value, long duration) {
         return ResponseCookie.from(name, value)
                 .httpOnly(true)
-                .secure(false) 
+                .secure(cookieSecure) // false trên dev (HTTP), true trên prod (HTTPS)
                 .path("/")
                 .maxAge(duration)
                 .sameSite("Lax")
                 .build();
     }
 
-    private LoginResponse buildLoginResponse(String accessToken, String refreshToken, Auth auth) {
-    return LoginResponse.builder()
-            .accessToken(accessToken)
-            .refreshToken(refreshToken)
-            .tokenType("Bearer")
-            .expiresIn(accessTokenExpiration) 
-            .user(LoginResponse.UserInfo.builder()
-                    .id(auth.getId())
-                    .username(auth.getUsername())
-                    .role(auth.getRole())
-                    .build())
-            .build();
-}
+    private LoginResponse buildLoginResponse(String accessToken, Auth auth) {
+        return LoginResponse.builder()
+                .accessToken(accessToken)
+                .tokenType("Bearer")
+                .expiresIn(accessTokenExpiration)
+                .user(LoginResponse.UserInfo.builder()
+                        .id(auth.getId())
+                        .username(auth.getUsername())
+                        .role(auth.getRole())
+                        .build())
+                .build();
+    }
 }

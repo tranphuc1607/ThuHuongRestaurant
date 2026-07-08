@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 import { useState, useEffect, useCallback } from "react";
 import { getAuthHeaders } from "@/lib/auth";
 import { extractApiError } from "@/lib/utils";
@@ -32,12 +32,9 @@ export default function AttendancePage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState("");
 
-  // Edit form state
   const [editField, setEditField] = useState<"checkInTime" | "checkOutTime">("checkInTime");
   const [editTime, setEditTime] = useState("");
   const [editReason, setEditReason] = useState("");
-
-  // Punish form state
   const [punishAmount, setPunishAmount] = useState("");
   const [punishReason, setPunishReason] = useState("");
 
@@ -66,7 +63,7 @@ export default function AttendancePage() {
   }, []);
 
   function fmtTime(iso?: string) {
-    if (!iso) return "—";
+    if (!iso) return null;
     return new Date(iso).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
   }
 
@@ -125,34 +122,151 @@ export default function AttendancePage() {
 
   const months = Array.from({ length: 12 }, (_, i) => i + 1);
   const years = [now.getFullYear() - 1, now.getFullYear()];
+  const skeletonRows = Array.from({ length: 6 });
 
   return (
-    <div className="p-6">
-      {toast && <div className="fixed top-4 right-4 bg-gray-800 text-white text-sm px-4 py-2.5 rounded shadow-lg z-50">{toast}</div>}
+    <div className="p-3 md:p-6">
+      {toast && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 md:top-4 md:right-4 md:left-auto md:translate-x-0 bg-gray-800 text-white text-sm px-4 py-2.5 rounded-xl shadow-lg z-50 whitespace-nowrap">
+          {toast}
+        </div>
+      )}
 
-      <div className="flex items-center gap-3 mb-5">
-        <Link href="/admin/nhan-su" className="text-muted-soft hover:text-gray-600 text-sm">← Nhân sự</Link>
-        <span className="text-gray-300">/</span>
-        <h1 className="text-xl font-bold text-ink">Chấm công</h1>
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-4">
+        <Link href="/admin/nhan-su"
+          className="w-9 h-9 flex items-center justify-center rounded-xl bg-surface-card text-muted hover:bg-hairline touch-manipulation"
+          style={{ WebkitTapHighlightColor: "transparent" }}>←</Link>
+        <div>
+          <h1 className="text-lg font-bold text-ink">Chấm công</h1>
+          <p className="text-xs text-muted">Tháng {month}/{year}</p>
+        </div>
       </div>
 
-      <div className="flex flex-wrap gap-3 mb-4 items-center">
-        <select value={month} onChange={(e) => { setMonth(Number(e.target.value)); setPage(0); }}
-          className="border border-hairline px-3 py-1.5 text-sm rounded outline-none focus:border-primary bg-white">
-          {months.map(m => <option key={m} value={m}>Tháng {m}</option>)}
-        </select>
-        <select value={year} onChange={(e) => { setYear(Number(e.target.value)); setPage(0); }}
-          className="border border-hairline px-3 py-1.5 text-sm rounded outline-none focus:border-primary bg-white">
-          {years.map(y => <option key={y} value={y}>{y}</option>)}
-        </select>
-        <select value={employeeFilter} onChange={(e) => { setEmployeeFilter(e.target.value); setPage(0); }}
-          className="border border-hairline px-3 py-1.5 text-sm rounded outline-none focus:border-primary bg-white">
-          <option value="">Tất cả nhân viên</option>
-          {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-        </select>
+      {/* Filters — horizontal scroll on mobile */}
+      <div className="overflow-x-auto -mx-3 px-3 md:mx-0 md:px-0 mb-4">
+        <div className="flex gap-2 min-w-max">
+          <select value={month} onChange={(e) => { setMonth(Number(e.target.value)); setPage(0); }}
+            className="border border-hairline px-3 py-2 text-sm rounded-xl outline-none focus:border-primary bg-white">
+            {months.map(m => <option key={m} value={m}>Tháng {m}</option>)}
+          </select>
+          <select value={year} onChange={(e) => { setYear(Number(e.target.value)); setPage(0); }}
+            className="border border-hairline px-3 py-2 text-sm rounded-xl outline-none focus:border-primary bg-white">
+            {years.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <select value={employeeFilter} onChange={(e) => { setEmployeeFilter(e.target.value); setPage(0); }}
+            className="border border-hairline px-3 py-2 text-sm rounded-xl outline-none focus:border-primary bg-white min-w-[160px]">
+            <option value="">Tất cả nhân viên</option>
+            {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+          </select>
+        </div>
       </div>
 
-      <div className="bg-canvas rounded-lg border border-hairline overflow-hidden">
+      {/* ── MOBILE CARDS ── */}
+      <div className="block md:hidden">
+        {loading ? (
+          <div className="space-y-2">
+            {skeletonRows.map((_, i) => (
+              <div key={i} className="bg-white rounded-2xl border border-hairline p-4 animate-pulse">
+                <div className="flex gap-3">
+                  <div className="h-4 bg-gray-200 rounded w-1/4" />
+                  <div className="h-4 bg-gray-100 rounded w-1/3 ml-auto" />
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <div className="h-8 bg-gray-100 rounded-xl" />
+                  <div className="h-8 bg-gray-100 rounded-xl" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : records.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-hairline p-10 text-center text-muted-soft text-sm">
+            Không có bản ghi chấm công
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {records.map((r) => {
+              const checkIn = fmtTime(r.checkInTime);
+              const checkOut = fmtTime(r.checkOutTime);
+              return (
+                <div key={r.id} className="bg-white rounded-2xl border border-hairline p-4">
+                  {/* Row 1: name + date */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="font-semibold text-ink text-sm">{r.employeeName}</div>
+                      <div className="text-xs text-muted mt-0.5">{r.shiftName} · {r.workDate}</div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      {r.lateMinutes ? (
+                        <span className="text-xs font-bold text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded-full">Muộn {r.lateMinutes}′</span>
+                      ) : checkIn ? (
+                        <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">Đúng giờ</span>
+                      ) : (
+                        <span className="text-xs text-muted-soft bg-surface-card px-2 py-0.5 rounded-full">Chưa check-in</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Row 2: check-in / check-out / hours */}
+                  <div className="flex gap-3 mt-3">
+                    <div className="flex-1 bg-green-50 rounded-xl px-3 py-2 text-center">
+                      <div className="text-xs text-muted-soft">Check-in</div>
+                      <div className="text-sm font-bold text-green-600 mt-0.5">{checkIn ?? "—"}</div>
+                    </div>
+                    <div className="flex-1 bg-blue-50 rounded-xl px-3 py-2 text-center">
+                      <div className="text-xs text-muted-soft">Check-out</div>
+                      <div className="text-sm font-bold text-blue-600 mt-0.5">{checkOut ?? "—"}</div>
+                    </div>
+                    <div className="flex-1 bg-surface-card rounded-xl px-3 py-2 text-center">
+                      <div className="text-xs text-muted-soft">Giờ làm</div>
+                      <div className="text-sm font-bold text-ink mt-0.5">{r.totalHours != null ? `${r.totalHours}h` : "—"}</div>
+                    </div>
+                  </div>
+
+                  {/* Punishment */}
+                  {r.punished && r.punishmentAmount && (
+                    <div className="mt-2 flex items-center gap-2 bg-red-50 rounded-xl px-3 py-2">
+                      <span className="text-xs font-bold text-red-500">🚫 Phạt: {r.punishmentAmount.toLocaleString("vi-VN")}đ</span>
+                      {r.punishmentReason && <span className="text-xs text-muted-soft truncate">— {r.punishmentReason}</span>}
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  <div className="flex gap-2 mt-3 pt-3 border-t border-hairline">
+                    <button
+                      onPointerDown={e => { if (e.pointerType === "touch") { e.preventDefault(); openEdit(r); } }}
+                      onClick={() => openEdit(r)}
+                      className="flex-1 py-2 bg-blue-50 text-blue-600 text-xs font-semibold rounded-xl hover:bg-blue-100 touch-manipulation"
+                      style={{ WebkitTapHighlightColor: "transparent" }}>
+                      ✏️ Sửa giờ
+                    </button>
+                    {r.punished ? (
+                      <button
+                        onPointerDown={e => { if (e.pointerType === "touch") { e.preventDefault(); removePunish(r); } }}
+                        onClick={() => removePunish(r)}
+                        className="flex-1 py-2 bg-surface-card text-muted text-xs font-semibold rounded-xl hover:bg-hairline touch-manipulation"
+                        style={{ WebkitTapHighlightColor: "transparent" }}>
+                        Xóa phạt
+                      </button>
+                    ) : (
+                      <button
+                        onPointerDown={e => { if (e.pointerType === "touch") { e.preventDefault(); openPunish(r); } }}
+                        onClick={() => openPunish(r)}
+                        className="flex-1 py-2 bg-red-50 text-red-500 text-xs font-semibold rounded-xl hover:bg-red-100 touch-manipulation"
+                        style={{ WebkitTapHighlightColor: "transparent" }}>
+                        🚫 Ghi phạt
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── DESKTOP TABLE ── */}
+      <div className="hidden md:block bg-canvas rounded-lg border border-hairline overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -179,8 +293,8 @@ export default function AttendancePage() {
                     <div className="text-xs text-muted">{r.shiftName}</div>
                     <div className="text-xs text-muted-soft">{r.workDate}</div>
                   </td>
-                  <td className="px-4 py-2.5 text-center text-green-600 font-mono text-xs">{fmtTime(r.checkInTime)}</td>
-                  <td className="px-4 py-2.5 text-center text-blue-600 font-mono text-xs">{fmtTime(r.checkOutTime)}</td>
+                  <td className="px-4 py-2.5 text-center text-green-600 font-mono text-xs">{fmtTime(r.checkInTime) ?? "—"}</td>
+                  <td className="px-4 py-2.5 text-center text-blue-600 font-mono text-xs">{fmtTime(r.checkOutTime) ?? "—"}</td>
                   <td className="px-4 py-2.5 text-center font-medium">{r.totalHours != null ? `${r.totalHours}h` : "—"}</td>
                   <td className="px-4 py-2.5 text-center">
                     {r.lateMinutes ? <span className="text-yellow-600 font-semibold">{r.lateMinutes}′</span> : <span className="text-gray-300">—</span>}
@@ -195,14 +309,11 @@ export default function AttendancePage() {
                   </td>
                   <td className="px-4 py-2.5">
                     <div className="flex items-center justify-center gap-1 flex-wrap">
-                      <button onClick={() => openEdit(r)}
-                        className="px-2 py-1 bg-blue-50 text-blue-600 text-xs rounded hover:bg-blue-100">Sửa giờ</button>
+                      <button onClick={() => openEdit(r)} className="px-2 py-1 bg-blue-50 text-blue-600 text-xs rounded hover:bg-blue-100">Sửa giờ</button>
                       {r.punished ? (
-                        <button onClick={() => removePunish(r)}
-                          className="px-2 py-1 bg-canvas text-muted text-xs rounded hover:bg-surface-card">Xóa phạt</button>
+                        <button onClick={() => removePunish(r)} className="px-2 py-1 bg-canvas text-muted text-xs rounded hover:bg-surface-card">Xóa phạt</button>
                       ) : (
-                        <button onClick={() => openPunish(r)}
-                          className="px-2 py-1 bg-red-50 text-red-500 text-xs rounded hover:bg-red-100">Ghi phạt</button>
+                        <button onClick={() => openPunish(r)} className="px-2 py-1 bg-red-50 text-red-500 text-xs rounded hover:bg-red-100">Ghi phạt</button>
                       )}
                     </div>
                   </td>
@@ -222,73 +333,108 @@ export default function AttendancePage() {
         )}
       </div>
 
-      {/* Edit attendance modal */}
+      {/* Mobile pagination */}
+      {totalPages > 1 && (
+        <div className="flex md:hidden items-center justify-center gap-3 pt-4">
+          <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
+            className="w-10 h-10 flex items-center justify-center rounded-xl border border-hairline disabled:opacity-40 touch-manipulation text-sm"
+            style={{ WebkitTapHighlightColor: "transparent" }}>←</button>
+          <span className="text-sm text-muted">{page + 1} / {totalPages}</span>
+          <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
+            className="w-10 h-10 flex items-center justify-center rounded-xl border border-hairline disabled:opacity-40 touch-manipulation text-sm"
+            style={{ WebkitTapHighlightColor: "transparent" }}>→</button>
+        </div>
+      )}
+
+      {/* ── MODAL: SỬA GIỜ ── */}
       {modal?.type === "edit" && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setModal(null)}>
-          <div className="bg-canvas rounded-lg border border-hairline-xl p-6 w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
-            <h2 className="font-bold text-ink mb-1">Sửa giờ chấm công</h2>
-            <p className="text-sm text-muted mb-4">{modal.record.employeeName} — {modal.record.workDate}</p>
-            <form onSubmit={submitEdit} className="space-y-4">
+        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50" onClick={() => setModal(null)}>
+          <div className="bg-white w-full sm:max-w-sm sm:mx-4 sm:rounded-2xl rounded-t-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-center pt-3 pb-1 sm:hidden">
+              <div className="w-10 h-1 bg-gray-300 rounded-full" />
+            </div>
+            <div className="px-5 pt-3 pb-2 border-b border-hairline flex justify-between items-center">
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Loại giờ</label>
+                <h2 className="font-bold text-ink">Sửa giờ chấm công</h2>
+                <p className="text-xs text-muted mt-0.5">{modal.record.employeeName} — {modal.record.workDate}</p>
+              </div>
+              <button onClick={() => setModal(null)} className="w-8 h-8 flex items-center justify-center text-muted rounded-full hover:bg-surface-card text-xl touch-manipulation"
+                style={{ WebkitTapHighlightColor: "transparent" }}>×</button>
+            </div>
+            <form onSubmit={submitEdit} className="px-5 py-4 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase">Loại giờ</label>
                 <select value={editField} onChange={(e) => setEditField(e.target.value as "checkInTime" | "checkOutTime")}
-                  className="w-full border border-hairline px-3 py-2 text-sm outline-none focus:border-primary rounded bg-white">
+                  className="w-full border border-hairline px-3 py-2.5 text-sm outline-none focus:border-primary rounded-xl bg-white">
                   <option value="checkInTime">Check-in</option>
                   <option value="checkOutTime">Check-out</option>
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Thời gian mới *</label>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase">Thời gian mới *</label>
                 <input type="datetime-local" value={editTime} onChange={(e) => setEditTime(e.target.value)}
-                  className="w-full border border-hairline px-3 py-2 text-sm outline-none focus:border-primary rounded" />
+                  className="w-full border border-hairline px-3 py-2.5 text-sm outline-none focus:border-primary rounded-xl" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Lý do *</label>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase">Lý do *</label>
                 <input value={editReason} onChange={(e) => setEditReason(e.target.value)}
                   placeholder="VD: Máy chấm công lỗi"
-                  className="w-full border border-hairline px-3 py-2 text-sm outline-none focus:border-primary rounded" />
+                  className="w-full border border-hairline px-3 py-2.5 text-sm outline-none focus:border-primary rounded-xl" />
               </div>
               {actionError && <div className="text-red-500 text-sm">{actionError}</div>}
-              <div className="flex gap-3">
+              <div className="flex gap-3 pb-2">
                 <button type="submit" disabled={actionLoading}
-                  className="px-5 py-2 bg-primary text-white text-sm font-semibold rounded hover:bg-primary-dark disabled:opacity-60">
+                  className="flex-1 py-3 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary-dark disabled:opacity-60 touch-manipulation"
+                  style={{ WebkitTapHighlightColor: "transparent" }}>
                   {actionLoading ? "Đang lưu..." : "Lưu"}
                 </button>
                 <button type="button" onClick={() => setModal(null)}
-                  className="px-5 py-2 bg-canvas text-gray-600 text-sm rounded hover:bg-surface-card">Hủy</button>
+                  className="flex-1 py-3 bg-surface-card text-gray-600 text-sm font-semibold rounded-xl hover:bg-hairline touch-manipulation"
+                  style={{ WebkitTapHighlightColor: "transparent" }}>Hủy</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Punish modal */}
+      {/* ── MODAL: GHI PHẠT ── */}
       {modal?.type === "punish" && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setModal(null)}>
-          <div className="bg-canvas rounded-lg border border-hairline-xl p-6 w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
-            <h2 className="font-bold text-ink mb-1">Ghi khoản phạt</h2>
-            <p className="text-sm text-muted mb-4">{modal.record.employeeName} — {modal.record.workDate}</p>
-            <form onSubmit={submitPunish} className="space-y-4">
+        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50" onClick={() => setModal(null)}>
+          <div className="bg-white w-full sm:max-w-sm sm:mx-4 sm:rounded-2xl rounded-t-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-center pt-3 pb-1 sm:hidden">
+              <div className="w-10 h-1 bg-gray-300 rounded-full" />
+            </div>
+            <div className="px-5 pt-3 pb-2 border-b border-hairline flex justify-between items-center">
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Số tiền phạt (VNĐ) *</label>
+                <h2 className="font-bold text-ink">Ghi khoản phạt</h2>
+                <p className="text-xs text-muted mt-0.5">{modal.record.employeeName} — {modal.record.workDate}</p>
+              </div>
+              <button onClick={() => setModal(null)} className="w-8 h-8 flex items-center justify-center text-muted rounded-full hover:bg-surface-card text-xl touch-manipulation"
+                style={{ WebkitTapHighlightColor: "transparent" }}>×</button>
+            </div>
+            <form onSubmit={submitPunish} className="px-5 py-4 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase">Số tiền phạt (VNĐ) *</label>
                 <input type="number" min="1000" value={punishAmount} onChange={(e) => setPunishAmount(e.target.value)}
                   placeholder="VD: 50000"
-                  className="w-full border border-hairline px-3 py-2 text-sm outline-none focus:border-primary rounded" />
+                  className="w-full border border-hairline px-3 py-2.5 text-sm outline-none focus:border-primary rounded-xl" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Lý do phạt *</label>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase">Lý do phạt *</label>
                 <input value={punishReason} onChange={(e) => setPunishReason(e.target.value)}
                   placeholder="VD: Đi muộn 30 phút không xin phép"
-                  className="w-full border border-hairline px-3 py-2 text-sm outline-none focus:border-primary rounded" />
+                  className="w-full border border-hairline px-3 py-2.5 text-sm outline-none focus:border-primary rounded-xl" />
               </div>
               {actionError && <div className="text-red-500 text-sm">{actionError}</div>}
-              <div className="flex gap-3">
+              <div className="flex gap-3 pb-2">
                 <button type="submit" disabled={actionLoading}
-                  className="px-5 py-2 bg-red-500 text-white text-sm font-semibold rounded hover:bg-red-600 disabled:opacity-60">
+                  className="flex-1 py-3 bg-red-500 text-white text-sm font-bold rounded-xl hover:bg-red-600 disabled:opacity-60 touch-manipulation"
+                  style={{ WebkitTapHighlightColor: "transparent" }}>
                   {actionLoading ? "Đang lưu..." : "Ghi phạt"}
                 </button>
                 <button type="button" onClick={() => setModal(null)}
-                  className="px-5 py-2 bg-canvas text-gray-600 text-sm rounded hover:bg-surface-card">Hủy</button>
+                  className="flex-1 py-3 bg-surface-card text-gray-600 text-sm font-semibold rounded-xl hover:bg-hairline touch-manipulation"
+                  style={{ WebkitTapHighlightColor: "transparent" }}>Hủy</button>
               </div>
             </form>
           </div>

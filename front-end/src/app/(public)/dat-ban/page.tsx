@@ -1037,7 +1037,7 @@ export default function DatBanPage() {
         style={{ background: "linear-gradient(135deg, #a9583e 0%, #cc785c 100%)" }}
       >
         <p className="text-xs uppercase tracking-[4px] opacity-70 mb-3">Nhà hàng Thu Hương</p>
-        <h1 className="text-4xl font-bold" style={{ fontFamily: "Georgia, serif" }}>
+        <h1 className="text-4xl font-bold tracking-tight">
           Đặt Bàn Trực Tuyến
         </h1>
         <div className="w-12 h-0.5 bg-white/60 mx-auto mt-4" />

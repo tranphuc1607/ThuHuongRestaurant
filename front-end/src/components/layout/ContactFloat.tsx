@@ -78,11 +78,11 @@ export default function ContactFloat() {
       )}
 
       {/* Container cố định góc phải dưới (mobile) / trái dưới (desktop) */}
-      <div className="fixed bottom-6 right-6 sm:left-6 sm:right-auto z-[250]">
+      <div className="fixed bottom-6 left-6 z-[250]">
 
         {/* Sub-actions: absolute phía trên nút toggle, xuất hiện từ dưới lên */}
         <div
-          className="absolute bottom-[calc(100%+10px)] right-0 sm:left-0 sm:right-auto
+          className="absolute bottom-[calc(100%+10px)] left-0
                      flex flex-col gap-2.5 pointer-events-none"
         >
           {/* Zalo ở dưới cùng (gần nút), Call ở trên — render ngược để Zalo gần toggle */}
