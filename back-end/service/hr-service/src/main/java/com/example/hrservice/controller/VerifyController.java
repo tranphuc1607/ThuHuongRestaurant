@@ -78,8 +78,8 @@ public class VerifyController {
                         ? "<br>⚠️ Muộn " + result.getLateMinutes() + " phút"
                         : "<br>✅ Đúng giờ";
                 writer.write(buildHtml("✅ Check-in thành công!",
-                        "Ca: <b>" + result.getShiftName() + "</b><br>"
-                        + "Giờ vào: <b>" + time + "</b>" + lateMsg,
+                        "Ca: <b>" + escapeHtml(result.getShiftName()) + "</b><br>"
+                        + "Giờ vào: <b>" + escapeHtml(time) + "</b>" + lateMsg,
                         "#27ae60"));
             } else {
                 AttendanceResponse result = attendanceService.checkOut(employeeId, shiftId);
@@ -88,26 +88,46 @@ public class VerifyController {
                         ? "<br>⏱️ Tổng: <b>" + result.getTotalHours() + " giờ</b>"
                         : "";
                 writer.write(buildHtml("✅ Check-out thành công!",
-                        "Ca: <b>" + result.getShiftName() + "</b><br>"
-                        + "Giờ ra: <b>" + time + "</b>" + hoursMsg,
+                        "Ca: <b>" + escapeHtml(result.getShiftName()) + "</b><br>"
+                        + "Giờ ra: <b>" + escapeHtml(time) + "</b>" + hoursMsg,
                         "#2980b9"));
             }
         } catch (Exception e) {
-            writer.write(buildHtml("❌ Lỗi", e.getMessage(), "#e74c3c"));
+            writer.write(buildHtml("❌ Lỗi", escapeHtml(e.getMessage()), "#e74c3c"));
         }
     }
 
     private String getClientIp(HttpServletRequest request) {
-        String xff = request.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) {
-            return xff.split(",")[0].trim();
-        }
+        // Không tin tưởng X-Forwarded-For vì attacker có thể forge header để bypass WiFi check.
         return request.getRemoteAddr();
     }
 
     private boolean isAllowedIp(String clientIp) {
         if ("*".equals(allowedIp) || "ANY".equals(allowedIp)) return true;
-        return clientIp.equals(allowedIp) || clientIp.startsWith(allowedIp);
+        // Exact match
+        if (clientIp.equals(allowedIp)) return true;
+        // Wildcard subnet: "192.168.1.*" — so sánh từng octet, không dùng startsWith()
+        // để tránh "192.168.1.1" vô tình match "192.168.1.100"
+        if (allowedIp.endsWith(".*")) {
+            String prefix = allowedIp.substring(0, allowedIp.length() - 2); // "192.168.1"
+            String[] prefixParts = prefix.split("\\.");
+            String[] clientParts = clientIp.split("\\.");
+            if (clientParts.length < prefixParts.length) return false;
+            for (int i = 0; i < prefixParts.length; i++) {
+                if (!prefixParts[i].equals(clientParts[i])) return false;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    private String escapeHtml(String input) {
+        if (input == null) return "";
+        return input.replace("&", "&amp;")
+                    .replace("<", "&lt;")
+                    .replace(">", "&gt;")
+                    .replace("\"", "&quot;")
+                    .replace("'", "&#x27;");
     }
 
     private String buildHtml(String title, String message, String color) {

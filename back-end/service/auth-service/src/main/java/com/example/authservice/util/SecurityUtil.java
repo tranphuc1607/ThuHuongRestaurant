@@ -42,10 +42,11 @@ public class SecurityUtil {
         List<String> roles = List.of(roleName.startsWith("ROLE_") ? roleName : "ROLE_" + roleName);
 
         JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer("ThuHuongRestaurant")
                 .issuedAt(now)
                 .expiresAt(validity)
                 .subject(auth.getUsername())
-                .claim("roles", roles)       
+                .claim("roles", roles)
                 .build();
 
         JwsHeader jwsHeader = JwsHeader.with(JWT_ALGORITHM).build();

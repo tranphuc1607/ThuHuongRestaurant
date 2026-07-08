@@ -130,7 +130,7 @@ public class PaymentController {
 
     @PostMapping("/customer-request")
     public ResponseEntity<PaymentResponse> customerPaymentRequest(
-            @RequestBody CustomerPaymentRequest req) throws MessageException {
+            @RequestBody @Valid CustomerPaymentRequest req) throws MessageException {
         return ResponseEntity.ok(paymentService.createPaymentByToken(req));
     }
 
@@ -169,10 +169,9 @@ public class PaymentController {
     }
 
     private String getClientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
+        // Không tin tưởng X-Forwarded-For vì attacker có thể forge header này.
+        // Trong Docker, payment-service chỉ nhận request từ api-gateway (internal network).
+        // Dùng RemoteAddr để lấy IP thật từ kết nối TCP.
         return request.getRemoteAddr();
     }
 }

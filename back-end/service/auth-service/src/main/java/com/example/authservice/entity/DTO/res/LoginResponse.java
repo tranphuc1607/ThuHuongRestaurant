@@ -7,9 +7,9 @@ import lombok.Data;
 @Builder
 public class LoginResponse {
     private String accessToken;
-    private String refreshToken;
-    private String tokenType; 
-    private Long expiresIn;  
+    // refreshToken được gửi qua HttpOnly cookie, không trả trong body để tránh JS đọc được
+    private String tokenType;
+    private Long expiresIn;
 
     private UserInfo user;
 

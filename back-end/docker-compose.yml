@@ -2,10 +2,10 @@ services:
   redis:
     image: redis:7-alpine
     container_name: redis
-    ports:
-      - "6379:6379"
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    # Port KHÔNG expose ra host — chỉ internal services mới cần
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -35,9 +35,10 @@ services:
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
-    ports:
-      - "5672:5672"
-      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-rabbitmq}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-rabbitmq_secure_2024}
+    # 5672 và 15672 không expose ra host — chỉ internal services cần
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "check_running"]
       interval: 10s
@@ -49,8 +50,9 @@ services:
   discovery-server:
     build: ./discovery-server
     container_name: discovery-server
+    # Port 8761 chỉ expose khi debug — production nên bỏ dòng này
     ports:
-      - "8761:8761"
+      - "127.0.0.1:8761:8761"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8761/eureka/apps"]
       interval: 15s
@@ -62,8 +64,9 @@ services:
   config-server:
     build: ./config-server
     container_name: config-server
+    # Port 8888 chỉ bind localhost — busrefresh dùng: curl http://localhost:8888/actuator/busrefresh
     ports:
-      - "8888:8888"
+      - "127.0.0.1:8888:8888"
     depends_on:
       discovery-server:
         condition: service_healthy
@@ -72,6 +75,8 @@ services:
     environment:
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
       - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_USERNAME=${RABBITMQ_USER:-thuhuong_mq}
+      - SPRING_RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-rabbitmq_secure_2024}
       - SPRING_CLOUD_CONFIG_SERVER_GIT_URI=https://github.com/tranphuc1607/microservice-config-repo
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8888/actuator/health"]
@@ -96,11 +101,15 @@ services:
         condition: service_healthy
     environment:
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/product_db?allowPublicKeyRetrieval=true&useSSL=false
-      - SPRING_DATASOURCE_USERNAME=root
-      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - SPRING_DATASOURCE_USERNAME=product_user
+      - SPRING_DATASOURCE_PASSWORD=product_pass_2024
       - SPRING_CONFIG_IMPORT=configserver:http://config-server:8888
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
       - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD}
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_USERNAME=${RABBITMQ_USER:-thuhuong_mq}
+      - SPRING_RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-rabbitmq_secure_2024}
     networks:
       - microservice-network
 
@@ -115,10 +124,13 @@ services:
         condition: service_healthy
     environment:
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/inventory_db?allowPublicKeyRetrieval=true&useSSL=false
-      - SPRING_DATASOURCE_USERNAME=root
-      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - SPRING_DATASOURCE_USERNAME=inventory_user
+      - SPRING_DATASOURCE_PASSWORD=inventory_pass_2024
       - SPRING_CONFIG_IMPORT=configserver:http://config-server:8888
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_USERNAME=${RABBITMQ_USER:-thuhuong_mq}
+      - SPRING_RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-rabbitmq_secure_2024}
     networks:
       - microservice-network
 
@@ -133,10 +145,13 @@ services:
         condition: service_healthy
     environment:
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/user_db?allowPublicKeyRetrieval=true&useSSL=false
-      - SPRING_DATASOURCE_USERNAME=root
-      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - SPRING_DATASOURCE_USERNAME=user_user
+      - SPRING_DATASOURCE_PASSWORD=user_pass_2024
       - SPRING_CONFIG_IMPORT=configserver:http://config-server:8888
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_USERNAME=${RABBITMQ_USER:-thuhuong_mq}
+      - SPRING_RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-rabbitmq_secure_2024}
     networks:
       - microservice-network
 
@@ -153,10 +168,13 @@ services:
         condition: service_healthy
     environment:
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/auth_db?allowPublicKeyRetrieval=true&useSSL=false
-      - SPRING_DATASOURCE_USERNAME=root
-      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - SPRING_DATASOURCE_USERNAME=auth_user
+      - SPRING_DATASOURCE_PASSWORD=auth_pass_2024
       - SPRING_CONFIG_IMPORT=configserver:http://config-server:8888
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_USERNAME=${RABBITMQ_USER:-thuhuong_mq}
+      - SPRING_RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-rabbitmq_secure_2024}
     networks:
       - microservice-network
 
@@ -173,10 +191,13 @@ services:
         condition: service_healthy
     environment:
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/order_db?allowPublicKeyRetrieval=true&useSSL=false
-      - SPRING_DATASOURCE_USERNAME=root
-      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - SPRING_DATASOURCE_USERNAME=order_user
+      - SPRING_DATASOURCE_PASSWORD=order_pass_2024
       - SPRING_CONFIG_IMPORT=configserver:http://config-server:8888
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_USERNAME=${RABBITMQ_USER:-thuhuong_mq}
+      - SPRING_RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-rabbitmq_secure_2024}
       - BOOKING_TELEGRAM_BOT_TOKEN=${BOOKING_TELEGRAM_BOT_TOKEN}
       - BOOKING_TELEGRAM_BOT_USERNAME=${BOOKING_TELEGRAM_BOT_USERNAME}
       - BOOKING_TELEGRAM_ADMIN_IDS=${BOOKING_TELEGRAM_ADMIN_IDS}
@@ -196,10 +217,13 @@ services:
         condition: service_healthy
     environment:
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/payment_db?allowPublicKeyRetrieval=true&useSSL=false
-      - SPRING_DATASOURCE_USERNAME=root
-      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - SPRING_DATASOURCE_USERNAME=payment_user
+      - SPRING_DATASOURCE_PASSWORD=payment_pass_2024
       - SPRING_CONFIG_IMPORT=configserver:http://config-server:8888
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_USERNAME=${RABBITMQ_USER:-thuhuong_mq}
+      - SPRING_RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-rabbitmq_secure_2024}
       - SEPAY_WEBHOOK_APIKEY=${SEPAY_WEBHOOK_APIKEY}
       # Production: thay * bang IP that cua Sepay (103.57.220.220,103.57.220.221)
       - SEPAY_WEBHOOK_ALLOWED_IPS=*
@@ -219,10 +243,13 @@ services:
         condition: service_healthy
     environment:
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/hr_db?allowPublicKeyRetrieval=true&useSSL=false
-      - SPRING_DATASOURCE_USERNAME=root
-      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - SPRING_DATASOURCE_USERNAME=hr_user
+      - SPRING_DATASOURCE_PASSWORD=hr_pass_2024
       - SPRING_CONFIG_IMPORT=configserver:http://config-server:8888
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_USERNAME=${RABBITMQ_USER:-thuhuong_mq}
+      - SPRING_RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-rabbitmq_secure_2024}
       # Điền sau khi tạo bot trên BotFather:
       - HR_TELEGRAM_BOT_TOKEN=${HR_TELEGRAM_BOT_TOKEN}
       - HR_TELEGRAM_BOT_USERNAME=${HR_TELEGRAM_BOT_USERNAME}
@@ -245,6 +272,9 @@ services:
     environment:
       - SPRING_CONFIG_IMPORT=configserver:http://config-server:8888
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_USERNAME=${RABBITMQ_USER:-thuhuong_mq}
+      - SPRING_RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-rabbitmq_secure_2024}
     networks:
       - microservice-network
 
