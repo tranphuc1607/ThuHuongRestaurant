@@ -33,6 +33,25 @@ public class DashboardResponse {
 
         private long todayTransactions;
         private Map<String, Double> todayByMethod;
+
+        @Builder.Default
+        private List<RevenuePeriod> dailySeries = List.of();
+        @Builder.Default
+        private List<RevenuePeriod> weeklySeries = List.of();
+        @Builder.Default
+        private List<RevenuePeriod> monthlySeries = List.of();
+        @Builder.Default
+        private List<RevenuePeriod> yearlySeries = List.of();
+    }
+
+    @Data
+    @Builder
+    public static class RevenuePeriod {
+        private String period;
+        private double revenue;
+        private long transactions;
+        @Builder.Default
+        private Map<String, Double> byMethod = Map.of();
     }
 
     @Data
@@ -64,7 +83,16 @@ public class DashboardResponse {
     @Builder
     public static class InventoryAlertStats {
         private int lowStockCount;
-        private List<String> lowStockItems;
+        private List<LowStockItem> lowStockItems;
+
+        @Data
+        @Builder
+        public static class LowStockItem {
+            private String name;
+            private String unit;
+            private Double currentQty;
+            private Double minThreshold;
+        }
     }
 
     @Data

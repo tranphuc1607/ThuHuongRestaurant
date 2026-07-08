@@ -8,6 +8,8 @@ public class UpdateProfileRequest {
 
     private String fullName;
 
+    private String phone;
+
     @Email(message = "Email không hợp lệ")
     private String email;
 }

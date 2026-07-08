@@ -10,6 +10,7 @@ import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 
 import java.util.ArrayList;
+
 import java.util.List;
 
 @Entity
@@ -40,6 +41,11 @@ public class Order extends BaseEntity {
     @Builder.Default
     private List<OrderItem> items = new ArrayList<>();
 
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
+    @BatchSize(size = 20)
+    @Builder.Default
+    private List<OrderSurcharge> surcharges = new ArrayList<>();
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     @Builder.Default
@@ -65,6 +71,12 @@ public class Order extends BaseEntity {
 
     @Column(length = 500)
     private String note;
+
+    @Column(name = "guest_count")
+    private Integer guestCount;
+
+    @Column(name = "cancel_reason", length = 500)
+    private String cancelReason;
 
     @Builder.Default
     private boolean isDeleted = false;

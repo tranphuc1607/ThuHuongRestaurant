@@ -37,7 +37,8 @@ public class PayrollService {
     }
 
     private PayrollResponse calculate(Employee employee, int month, int year) {
-        LocalDate start = LocalDate.of(year, month, 1);
+        // Kỳ lương: mùng 10 tháng này → ngày 9 tháng sau
+        LocalDate start = LocalDate.of(year, month, 10);
         LocalDate end = start.plusMonths(1).minusDays(1);
 
         List<Attendance> attendances = attendanceRepository

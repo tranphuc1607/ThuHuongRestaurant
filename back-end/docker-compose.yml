@@ -16,7 +16,7 @@ services:
     image: mysql:8.4
     container_name: mysql
     environment:
-      MYSQL_ROOT_PASSWORD: "123456"
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD}"
       MYSQL_DATABASE: "auth_db" # Tạo sẵn một db mặc định nếu cần
     ports:
       - "3307:3306"
@@ -24,7 +24,7 @@ services:
       - mysql_data:/var/lib/mysql
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p123456"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -97,7 +97,7 @@ services:
     environment:
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/product_db?allowPublicKeyRetrieval=true&useSSL=false
       - SPRING_DATASOURCE_USERNAME=root
-      - SPRING_DATASOURCE_PASSWORD=123456
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD}
       - SPRING_CONFIG_IMPORT=configserver:http://config-server:8888
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
       - SPRING_DATA_REDIS_HOST=redis
@@ -116,7 +116,7 @@ services:
     environment:
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/inventory_db?allowPublicKeyRetrieval=true&useSSL=false
       - SPRING_DATASOURCE_USERNAME=root
-      - SPRING_DATASOURCE_PASSWORD=123456
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD}
       - SPRING_CONFIG_IMPORT=configserver:http://config-server:8888
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
     networks:
@@ -134,7 +134,7 @@ services:
     environment:
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/user_db?allowPublicKeyRetrieval=true&useSSL=false
       - SPRING_DATASOURCE_USERNAME=root
-      - SPRING_DATASOURCE_PASSWORD=123456
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD}
       - SPRING_CONFIG_IMPORT=configserver:http://config-server:8888
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
     networks:
@@ -154,7 +154,7 @@ services:
     environment:
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/auth_db?allowPublicKeyRetrieval=true&useSSL=false
       - SPRING_DATASOURCE_USERNAME=root
-      - SPRING_DATASOURCE_PASSWORD=123456
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD}
       - SPRING_CONFIG_IMPORT=configserver:http://config-server:8888
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
     networks:
@@ -174,12 +174,12 @@ services:
     environment:
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/order_db?allowPublicKeyRetrieval=true&useSSL=false
       - SPRING_DATASOURCE_USERNAME=root
-      - SPRING_DATASOURCE_PASSWORD=123456
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD}
       - SPRING_CONFIG_IMPORT=configserver:http://config-server:8888
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
-      - BOOKING_TELEGRAM_BOT_TOKEN=8920702924:AAFPYOKq5y0OnqiwpHfKEyWWT8f5ECVVL30
-      - BOOKING_TELEGRAM_BOT_USERNAME=thuhuongbookingbot
-      - BOOKING_TELEGRAM_ADMIN_IDS=7561161859
+      - BOOKING_TELEGRAM_BOT_TOKEN=${BOOKING_TELEGRAM_BOT_TOKEN}
+      - BOOKING_TELEGRAM_BOT_USERNAME=${BOOKING_TELEGRAM_BOT_USERNAME}
+      - BOOKING_TELEGRAM_ADMIN_IDS=${BOOKING_TELEGRAM_ADMIN_IDS}
     networks:
       - microservice-network
 
@@ -197,10 +197,10 @@ services:
     environment:
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/payment_db?allowPublicKeyRetrieval=true&useSSL=false
       - SPRING_DATASOURCE_USERNAME=root
-      - SPRING_DATASOURCE_PASSWORD=123456
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD}
       - SPRING_CONFIG_IMPORT=configserver:http://config-server:8888
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
-      - SEPAY_WEBHOOK_APIKEY=2fccdf037f81ef1e5712d77dca2d8fa9f55ad7faa102c9044a6197382f49536c
+      - SEPAY_WEBHOOK_APIKEY=${SEPAY_WEBHOOK_APIKEY}
       # Production: thay * bang IP that cua Sepay (103.57.220.220,103.57.220.221)
       - SEPAY_WEBHOOK_ALLOWED_IPS=*
     networks:
@@ -220,18 +220,16 @@ services:
     environment:
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/hr_db?allowPublicKeyRetrieval=true&useSSL=false
       - SPRING_DATASOURCE_USERNAME=root
-      - SPRING_DATASOURCE_PASSWORD=123456
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD}
       - SPRING_CONFIG_IMPORT=configserver:http://config-server:8888
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
       # Điền sau khi tạo bot trên BotFather:
-      - HR_TELEGRAM_BOT_TOKEN=8941433474:AAF_liqvHJk2ZedryNGe9sWiabL-0kgtsck
-      - HR_TELEGRAM_BOT_USERNAME=thuhuonghrbot
-      - HR_TELEGRAM_ADMIN_IDS=7561161859
-      # Secret để ký HMAC token check-in (đổi thành chuỗi random dài):
-      - HR_CHECKIN_SECRET=change-me-in-production
-      # IP prefix của mạng nội bộ (VD: 192.168.1) hoặc * để tắt check khi test:
-      - HR_WIFI_ALLOWED_IP=*
-      - HR_SERVER_PUBLIC_URL=http://14.232.39.99:8080
+      - HR_TELEGRAM_BOT_TOKEN=${HR_TELEGRAM_BOT_TOKEN}
+      - HR_TELEGRAM_BOT_USERNAME=${HR_TELEGRAM_BOT_USERNAME}
+      - HR_TELEGRAM_ADMIN_IDS=${HR_TELEGRAM_ADMIN_IDS}
+      - HR_CHECKIN_SECRET=${HR_CHECKIN_SECRET}
+      - HR_WIFI_ALLOWED_IP=${HR_WIFI_ALLOWED_IP}
+      - HR_SERVER_PUBLIC_URL=${HR_SERVER_PUBLIC_URL}
     networks:
       - microservice-network
 

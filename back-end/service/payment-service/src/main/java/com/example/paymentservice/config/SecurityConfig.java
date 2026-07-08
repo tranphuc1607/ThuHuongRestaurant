@@ -38,6 +38,8 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(publicUrls).permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/v1/payments/webhook/**").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/v1/payments/customer-request").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/payments/customer-status/**").permitAll()
                 .anyRequest().authenticated()
             )
             .oauth2ResourceServer(oauth -> oauth

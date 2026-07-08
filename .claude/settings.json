@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "This session is being continued from a previous conversation",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[POST-COMPACT] Phát hiện session mới sau compact. Thực hiện Post-Compact Protocol: cập nhật CLAUDE.md → memory → 3 agents trước khi trả lời.'"
+          }
+        ]
+      }
+    ]
+  }
+}

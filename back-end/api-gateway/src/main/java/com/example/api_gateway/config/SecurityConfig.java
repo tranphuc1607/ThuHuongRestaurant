@@ -19,6 +19,9 @@ import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtAuthenticationConverterAdapter;
 import org.springframework.security.web.server.SecurityWebFilterChain;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.reactive.CorsConfigurationSource;
+import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 import reactor.core.publisher.Mono;
 
 import javax.crypto.SecretKey;
@@ -43,14 +46,37 @@ public class SecurityConfig {
         return hierarchy;
     }
 
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOrigins(List.of(
+                "http://localhost:3000",
+                "http://127.0.0.1:3000"
+        ));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("*"));
+        config.setAllowCredentials(true); // cần cho HttpOnly refresh_token cookie
+        config.setMaxAge(3600L);
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
+    }
+
  @Bean
 public SecurityWebFilterChain springSecurityFilterChain(ServerHttpSecurity http) {
     http
+        .cors(cors -> cors.configurationSource(corsConfigurationSource()))
         .csrf(csrf -> csrf.disable())
         .authorizeExchange(exchanges -> exchanges
             .pathMatchers(HttpMethod.POST, "/api/v1/bookings").permitAll()
             .pathMatchers(HttpMethod.GET, "/api/v1/bookings/*").permitAll()
+            .pathMatchers(HttpMethod.GET, "/api/v1/bookings/history").permitAll()
             .pathMatchers(HttpMethod.PATCH, "/api/v1/bookings/cancel/*").permitAll()
+            .pathMatchers(HttpMethod.PATCH, "/api/v1/bookings/switch-payment/*").permitAll()
+            .pathMatchers(HttpMethod.PUT, "/api/v1/bookings/by-code/**").permitAll()
+            .pathMatchers(HttpMethod.GET, "/api/v1/orders/table/**").permitAll()
+            .pathMatchers(HttpMethod.POST, "/api/v1/payments/customer-request").permitAll()
+            .pathMatchers(HttpMethod.GET, "/api/v1/payments/customer-status/**").permitAll()
             .pathMatchers(HttpMethod.POST, "/api/v1/payments/webhook/**").permitAll()
             // verify endpoint: nhan vien bam nut check-in/out trong Telegram (khong co JWT)
             .pathMatchers(HttpMethod.GET, "/api/v1/hr/verify").permitAll()

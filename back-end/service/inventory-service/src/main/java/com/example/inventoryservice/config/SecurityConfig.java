@@ -3,7 +3,6 @@ package com.example.inventoryservice.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -44,10 +43,6 @@ public class SecurityConfig {
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(publicUrls).permitAll()
-                // Các endpoint nội bộ gọi từ order-service (Feign, không có JWT)
-                .requestMatchers(HttpMethod.POST, "/api/v1/inventory/deductions/order").permitAll()
-                .requestMatchers(HttpMethod.POST, "/api/v1/inventory/deductions/booking-restore").permitAll()
-                .requestMatchers(HttpMethod.POST, "/api/v1/inventory/deductions/stock-check").permitAll()
                 .anyRequest().authenticated()
             )
             .oauth2ResourceServer(oauth -> oauth

@@ -32,4 +32,7 @@ public class ProductCreateRequest {
 
     @Builder.Default
     private ProductStatus status = ProductStatus.AVAILABLE;
+
+    @Builder.Default
+    private String saleUnit = "PORTION";
 }

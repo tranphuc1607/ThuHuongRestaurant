@@ -24,27 +24,12 @@ public class ProductService {
 
     private final ProductRepository productRepository;
 
-    @Cacheable(value = "products", key = "'all:' + #page + ':' + #size")
-    public Page<ProductResponse> getAllProducts(int page, int size) {
-        return productRepository.findAll(PageRequest.of(page, size, Sort.by("id").ascending()))
-                .map(ProductResponse::from);
-    }
-
-    @Cacheable(value = "products", key = "'cat:' + #category + ':' + #page + ':' + #size")
-    public Page<ProductResponse> getProductsByCategory(ProductCategory category, int page, int size) {
-        return productRepository.findByCategory(category, PageRequest.of(page, size, Sort.by("id").ascending()))
-                .map(ProductResponse::from);
-    }
-
-    @Cacheable(value = "products", key = "'status:' + #status + ':' + #page + ':' + #size")
-    public Page<ProductResponse> getProductsByStatus(ProductStatus status, int page, int size) {
-        return productRepository.findByStatus(status, PageRequest.of(page, size, Sort.by("id").ascending()))
-                .map(ProductResponse::from);
-    }
-
-    @Cacheable(value = "products", key = "'search:' + #keyword + ':' + #page + ':' + #size")
-    public Page<ProductResponse> searchProducts(String keyword, int page, int size) {
-        return productRepository.findByNameContainingIgnoreCase(keyword, PageRequest.of(page, size, Sort.by("id").ascending()))
+    // Endpoint chính: hỗ trợ filter category + status + keyword kết hợp tùy ý
+    public Page<ProductResponse> getFiltered(ProductCategory category, ProductStatus status,
+                                             String keyword, int page, int size) {
+        String kw = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
+        return productRepository.findFiltered(category, status, kw,
+                PageRequest.of(page, size, Sort.by("id").ascending()))
                 .map(ProductResponse::from);
     }
 
@@ -65,6 +50,7 @@ public class ProductService {
                 .imageUrl(request.getImageUrl())
                 .category(request.getCategory())
                 .status(request.getStatus() != null ? request.getStatus() : ProductStatus.AVAILABLE)
+                .saleUnit(request.getSaleUnit() != null && !request.getSaleUnit().isBlank() ? request.getSaleUnit() : "PORTION")
                 .build();
         return ProductResponse.from(productRepository.save(product));
     }
@@ -84,6 +70,7 @@ public class ProductService {
         if (request.getImageUrl() != null) product.setImageUrl(request.getImageUrl());
         if (request.getCategory() != null) product.setCategory(request.getCategory());
         if (request.getStatus() != null) product.setStatus(request.getStatus());
+        if (request.getSaleUnit() != null && !request.getSaleUnit().isBlank()) product.setSaleUnit(request.getSaleUnit());
 
         return ProductResponse.from(productRepository.save(product));
     }

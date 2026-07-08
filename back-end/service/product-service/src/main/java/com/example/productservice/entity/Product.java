@@ -51,6 +51,10 @@ public class Product extends BaseEntity {
     private ProductStatus status = ProductStatus.AVAILABLE;
 
     @Builder.Default
+    @Column(name = "sale_unit", nullable = false, length = 30, columnDefinition = "VARCHAR(30) DEFAULT 'PORTION'")
+    private String saleUnit = "PORTION";
+
+    @Builder.Default
     @Column(name = "is_deleted", nullable = false)
     private boolean isDeleted = false;
     

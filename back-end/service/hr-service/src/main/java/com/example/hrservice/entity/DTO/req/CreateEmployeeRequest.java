@@ -17,6 +17,9 @@ public class CreateEmployeeRequest {
 
     private Long telegramId;
 
+    // Liên kết với userId trong user-service (tùy chọn, dùng khi tự động tạo từ role change)
+    private Long userId;
+
     @NotNull(message = "Loại nhân viên không được để trống")
     private EmployeeType type;
 

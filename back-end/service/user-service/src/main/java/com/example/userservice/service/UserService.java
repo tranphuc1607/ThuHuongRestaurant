@@ -1,5 +1,7 @@
 package com.example.userservice.service;
 
+import com.example.userservice.client.HrServiceClient;
+import com.example.userservice.client.dto.CreateHrEmployeeRequest;
 import com.example.userservice.entity.User;
 import com.example.userservice.entity.DTO.req.CreateUserRequest;
 import com.example.userservice.entity.DTO.req.UpdateProfileRequest;
@@ -9,6 +11,7 @@ import com.example.userservice.entity.DTO.res.UserStatsResponse;
 import com.example.userservice.repository.UserRepository;
 import com.example.restaurant_common.util.exception.MessageException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -16,12 +19,14 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final HrServiceClient hrServiceClient;
 
     @Transactional
     public UserResponse getCurrentUser(String username, String role) {
@@ -42,14 +47,17 @@ public class UserService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new MessageException("Không tìm thấy người dùng"));
 
+        if (req.getFullName() != null && !req.getFullName().isBlank()) {
+            user.setFullName(req.getFullName());
+        }
+        if (req.getPhone() != null && !req.getPhone().isBlank()) {
+            user.setPhone(req.getPhone());
+        }
         if (req.getEmail() != null && !req.getEmail().isBlank()) {
             if (!req.getEmail().equals(user.getEmail()) && userRepository.existsByEmail(req.getEmail())) {
                 throw new MessageException("Email này đã được sử dụng");
             }
             user.setEmail(req.getEmail());
-        }
-        if (req.getFullName() != null && !req.getFullName().isBlank()) {
-            user.setFullName(req.getFullName());
         }
 
         return UserResponse.from(userRepository.save(user));
@@ -108,7 +116,23 @@ public class UserService {
 
         String role = req.getRole().startsWith("ROLE_") ? req.getRole() : "ROLE_" + req.getRole();
         user.setRole(role);
-        return UserResponse.from(userRepository.save(user));
+        UserResponse saved = UserResponse.from(userRepository.save(user));
+
+        // Tự động tạo hồ sơ nhân viên HR khi role là EMPLOYEE hoặc ADMIN
+        if ("ROLE_EMPLOYEE".equals(role) || "ROLE_ADMIN".equals(role)) {
+            try {
+                String name = (user.getFullName() != null && !user.getFullName().isBlank())
+                        ? user.getFullName() : user.getUsername();
+                hrServiceClient.createEmployee(new CreateHrEmployeeRequest(
+                        name, null, user.getId(),
+                        "FULL_TIME", "HOURLY", 50000.0
+                ));
+            } catch (Exception e) {
+                log.warn("Auto-create HR employee failed for user {}: {}", id, e.getMessage());
+            }
+        }
+
+        return saved;
     }
 
     @Transactional

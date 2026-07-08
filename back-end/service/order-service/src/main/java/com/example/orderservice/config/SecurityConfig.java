@@ -40,8 +40,11 @@ public class SecurityConfig {
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/orders/*/checkout-internal").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/bookings").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/bookings/*").permitAll()
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/bookings/history").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.PATCH, "/api/v1/bookings/cancel/*").permitAll()
+                .requestMatchers(org.springframework.http.HttpMethod.PATCH, "/api/v1/bookings/switch-payment/*").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/bookings/confirm-by-code/*").permitAll()
+                .requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/v1/bookings/by-code/*/items").permitAll()
                 .anyRequest().authenticated()
             )
             .oauth2ResourceServer(oauth -> oauth

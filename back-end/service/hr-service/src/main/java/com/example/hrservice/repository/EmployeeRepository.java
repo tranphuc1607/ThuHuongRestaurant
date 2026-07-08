@@ -15,6 +15,8 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
 
     Optional<Employee> findByPhone(String phone);
 
+    Optional<Employee> findByUserId(Long userId);
+
     Page<Employee> findByActiveTrue(Pageable pageable);
 
     Page<Employee> findByNameContainingIgnoreCaseAndActiveTrue(String name, Pageable pageable);

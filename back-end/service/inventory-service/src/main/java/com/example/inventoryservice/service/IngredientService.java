@@ -24,23 +24,11 @@ public class IngredientService {
 
     private final IngredientRepository ingredientRepository;
 
-    public Page<IngredientResponse> getAllIngredients(int page, int size) {
-        return ingredientRepository.findAll(PageRequest.of(page, size, Sort.by("id").ascending()))
-                .map(IngredientResponse::from);
-    }
-
-    public Page<IngredientResponse> getByCategory(IngredientCategory category, int page, int size) {
-        return ingredientRepository.findByCategory(category, PageRequest.of(page, size, Sort.by("id").ascending()))
-                .map(IngredientResponse::from);
-    }
-
-    public Page<IngredientResponse> getByManagementType(ManagementType managementType, int page, int size) {
-        return ingredientRepository.findByManagementType(managementType, PageRequest.of(page, size, Sort.by("id").ascending()))
-                .map(IngredientResponse::from);
-    }
-
-    public Page<IngredientResponse> search(String keyword, int page, int size) {
-        return ingredientRepository.findByNameContainingIgnoreCase(keyword, PageRequest.of(page, size, Sort.by("id").ascending()))
+    public Page<IngredientResponse> getFiltered(IngredientCategory category, ManagementType managementType,
+                                                String keyword, int page, int size) {
+        String kw = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
+        return ingredientRepository.findFiltered(category, managementType, kw,
+                PageRequest.of(page, size, Sort.by("id").ascending()))
                 .map(IngredientResponse::from);
     }
 
@@ -86,5 +74,11 @@ public class IngredientService {
         Ingredient ingredient = ingredientRepository.findById(id)
                 .orElseThrow(() -> new MessageException("Không tìm thấy nguyên liệu với id: " + id));
         ingredientRepository.delete(ingredient); // @SQLDelete sẽ set is_active = false
+    }
+
+    @Transactional
+    public void activate(Long id) throws MessageException {
+        int updated = ingredientRepository.activateById(id);
+        if (updated == 0) throw new MessageException("Không tìm thấy nguyên liệu với id: " + id);
     }
 }

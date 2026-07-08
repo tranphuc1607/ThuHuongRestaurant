@@ -26,4 +26,6 @@ public class ProductUpdateRequest {
     private ProductCategory category;
 
     private ProductStatus status;
+
+    private String saleUnit;
 }

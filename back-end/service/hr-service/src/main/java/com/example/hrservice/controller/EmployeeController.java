@@ -35,6 +35,12 @@ public class EmployeeController {
         return ResponseEntity.ok(employeeService.getById(id));
     }
 
+    @GetMapping("/by-user/{userId}")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<EmployeeResponse> getByUserId(@PathVariable Long userId) throws MessageException {
+        return ResponseEntity.ok(employeeService.findByUserId(userId));
+    }
+
     @PostMapping
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<EmployeeResponse> create(@RequestBody @Valid CreateEmployeeRequest req) throws MessageException {

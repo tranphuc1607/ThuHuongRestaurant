@@ -3,7 +3,6 @@ package com.example.authservice.util;
 import com.example.authservice.entity.Auth;
 import com.nimbusds.jose.util.Base64;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.stereotype.Service;
@@ -15,7 +14,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 @Service
-@RefreshScope
 public class SecurityUtil {
 
     public static final MacAlgorithm JWT_ALGORITHM = MacAlgorithm.HS512;

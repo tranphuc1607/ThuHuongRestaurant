@@ -12,8 +12,10 @@ public class UserResponse {
     private String username;
     private String email;
     private String fullName;
+    private String phone;
     private String role;
     private boolean enabled;
+    private String status;
 
     public static UserResponse from(User user) {
         return UserResponse.builder()
@@ -21,8 +23,10 @@ public class UserResponse {
                 .username(user.getUsername())
                 .email(user.getEmail())
                 .fullName(user.getFullName())
+                .phone(user.getPhone())
                 .role(user.getRole())
                 .enabled(user.isEnabled())
+                .status(user.isEnabled() ? "ACTIVE" : "INACTIVE")
                 .build();
     }
 }

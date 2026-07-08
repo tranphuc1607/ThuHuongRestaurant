@@ -44,18 +44,36 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     @EntityGraph(attributePaths = "diningTable")
     Page<Booking> findAll(Pageable pageable);
 
-    @Modifying
-    @Query("UPDATE Booking b SET b.status = 'EXPIRED' WHERE b.status = 'PENDING_PAYMENT' AND b.createdAt < :cutoff")
-    int expireUnpaidBookings(@Param("cutoff") Instant cutoff);
+    @EntityGraph(attributePaths = "diningTable")
+    Page<Booking> findByStatusNot(BookingStatus status, Pageable pageable);
 
     @EntityGraph(attributePaths = "diningTable")
+    Page<Booking> findByStatusAndScheduledTimeBetween(BookingStatus status, Instant from, Instant to, Pageable pageable);
+
+    @EntityGraph(attributePaths = "diningTable")
+    Page<Booking> findByStatusNotIn(java.util.Collection<BookingStatus> statuses, Pageable pageable);
+
+    @Modifying
+    @Query("UPDATE Booking b SET b.status = 'EXPIRED' WHERE b.status = 'PENDING_PAYMENT' AND b.paymentMethod = 'BANK_TRANSFER' AND b.createdAt < :cutoff")
+    int expireUnpaidBookings(@Param("cutoff") Instant cutoff);
+
+    @EntityGraph(attributePaths = {"diningTable", "items"})
     Page<Booking> findByCustomerPhoneOrderByCreatedAtDesc(String customerPhone, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"diningTable", "items"})
+    Page<Booking> findByOwnerUsernameOrderByCreatedAtDesc(String ownerUsername, Pageable pageable);
 
     @Query("SELECT COUNT(b) FROM Booking b WHERE b.status = 'PENDING_PAYMENT'")
     long countPendingPayment();
 
+    @Query("SELECT COUNT(b) FROM Booking b WHERE b.status = 'PENDING_PAYMENT' AND b.scheduledTime BETWEEN :from AND :to")
+    long countPendingInRange(@Param("from") Instant from, @Param("to") Instant to);
+
     @Query("SELECT COUNT(b) FROM Booking b WHERE b.status = 'CONFIRMED' AND b.scheduledTime BETWEEN :from AND :to")
     long countConfirmedInRange(@Param("from") Instant from, @Param("to") Instant to);
+
+    @Query("SELECT COUNT(b) FROM Booking b WHERE b.scheduledTime BETWEEN :from AND :to AND b.status NOT IN ('EXPIRED', 'CANCELLED')")
+    long countActiveInRange(@Param("from") Instant from, @Param("to") Instant to);
 
     @Query("SELECT COUNT(b) FROM Booking b WHERE b.status = 'CONFIRMED' AND b.scheduledTime BETWEEN :now AND :soon")
     long countUpcomingConfirmed(@Param("now") Instant now, @Param("soon") Instant soon);

@@ -1,5 +1,8 @@
 package com.example.productservice.config;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -7,6 +10,8 @@ import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -15,16 +20,29 @@ import org.springframework.data.redis.serializer.RedisSerializationContext.Seria
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 
 @Configuration
 public class RedisConfig {
+
+    // PageImpl không có no-args constructor nên Jackson cần mixin để biết cách reconstruct
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    abstract static class PageImplMixin<T> {
+        @JsonCreator
+        PageImplMixin(
+                @JsonProperty("content") List<T> content,
+                @JsonProperty("number") int number,
+                @JsonProperty("size") int size,
+                @JsonProperty("totalElements") long totalElements) {}
+    }
 
     @Bean
     public RedisCacheManager cacheManager(RedisConnectionFactory connectionFactory) {
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule());
         mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        mapper.addMixIn(PageImpl.class, PageImplMixin.class);
         // Nhúng @class vào JSON để deserialization đúng kiểu (Page, List, v.v.)
         mapper.activateDefaultTyping(
                 LaissezFaireSubTypeValidator.instance,

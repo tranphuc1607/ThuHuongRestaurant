@@ -11,6 +11,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Optional;
+
 @Service
 @RequiredArgsConstructor
 public class EmployeeService {
@@ -32,6 +34,13 @@ public class EmployeeService {
 
     @Transactional
     public EmployeeResponse create(CreateEmployeeRequest req) throws MessageException {
+        // Nếu có userId → kiểm tra đã tồn tại chưa (auto-create từ user-service)
+        if (req.getUserId() != null) {
+            Optional<Employee> existing = employeeRepository.findByUserId(req.getUserId());
+            if (existing.isPresent()) {
+                return EmployeeResponse.from(existing.get());
+            }
+        }
         if (req.getPhone() != null && !req.getPhone().isBlank()) {
             if (employeeRepository.findByPhone(req.getPhone()).isPresent()) {
                 throw new MessageException("Số điện thoại này đã được đăng ký cho nhân viên khác");
@@ -50,8 +59,16 @@ public class EmployeeService {
                 .salaryType(req.getSalaryType())
                 .baseValue(req.getBaseValue())
                 .targetDays(req.getTargetDays())
+                .userId(req.getUserId())
                 .build();
         return EmployeeResponse.from(employeeRepository.save(employee));
+    }
+
+    public EmployeeResponse findByUserId(Long userId) throws MessageException {
+        return EmployeeResponse.from(
+                employeeRepository.findByUserId(userId)
+                        .orElseThrow(() -> new MessageException("Chưa có hồ sơ nhân viên HR cho user này"))
+        );
     }
 
     @Transactional

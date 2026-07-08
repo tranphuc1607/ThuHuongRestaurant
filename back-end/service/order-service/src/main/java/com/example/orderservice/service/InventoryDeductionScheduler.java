@@ -7,7 +7,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
@@ -21,10 +20,11 @@ public class InventoryDeductionScheduler {
     private final InventoryDeductionHelper deductionHelper;
 
     @Scheduled(fixedDelay = 30_000, initialDelay = 30_000)
-    @Transactional
+    // Không @Transactional ở đây — outer loop không được giữ lock
+    // Mỗi item deduct trong REQUIRES_NEW tx riêng của helper
     public void deductPendingItems() {
         try {
-            List<OrderItem> pending = orderItemRepository.findPendingDeductionsForUpdate(Instant.now(), OrderStatus.OPEN);
+            List<OrderItem> pending = orderItemRepository.findPendingDeductions(Instant.now(), OrderStatus.OPEN);
             if (pending.isEmpty()) return;
 
             log.info("[Scheduler] Tìm thấy {} item cần trừ kho", pending.size());

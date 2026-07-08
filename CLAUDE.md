@@ -697,6 +697,17 @@ Error:
 | dashboard-service 404 qua gateway | Route chưa có trong GitHub config repo | Thêm route `dashboard-service` vào `application.properties` trên GitHub + busrefresh |
 | Circular dependency Bot ↔ Service | `BookingAdminBot` inject `BookingService`, `BookingService` inject bot | Dùng `@Autowired @Lazy` khi inject `BookingService` vào bot |
 | Feign call mang JWT sang service khác thất bại | Không có `FeignConfig.authorizationInterceptor()` | Tạo `FeignConfig` đọc `Authorization` header từ `RequestContextHolder` |
+| Frontend "không kết nối được máy chủ" | CORS preflight OPTIONS bị 403 — `api-gateway/SecurityConfig` thiếu `CorsConfigurationSource` bean | Thêm bean + wire vào `http.cors(...)`, set `allowCredentials=true`, `allowedOrigins=["http://localhost:3000"]`. Rebuild + redeploy api-gateway |
+| Login hiển thị "Business Logic Exception" | auth-service đặt message tiếng Việt vào field `error`, không phải `message` | Dùng `extractApiError(json, fallback)` từ `lib/utils.ts` — pick field nào không phải chuỗi generic tiếng Anh |
+| Feign client trả về DTO toàn 0/null dù backend OK | `FormRestResponse` wrap mọi response trong `{statusCode, message, data}` — Feign default decoder deserialize wrapper thay vì `data` | Thêm custom `Decoder` bean trong `FeignConfig` của service đó: đọc `JsonNode → path("data") → convertValue(data, type)` |
+| Dashboard async Feign call bị 401 — JWT không được forward | `CompletableFuture.supplyAsync()` chạy trên ForkJoinPool riêng, `RequestContextHolder` dùng `ThreadLocal` không được kế thừa sang thread con | Capture `RequestAttributes attrs = RequestContextHolder.getRequestAttributes()` trên main thread TRƯỚC khi spawn, gọi `setRequestAttributes(attrs)` trong lambda, `resetRequestAttributes()` trong finally |
+| Feign `catch (FeignException)` bỏ lọt RuntimeException từ fallback → HTTP 500 | `spring.cloud.openfeign.circuitbreaker.enabled=true`: khi downstream trả 4xx, Resilience4j gọi fallback (throws RuntimeException), không phải FeignException trực tiếp | Đổi `catch (FeignException e)` thành `catch (Exception e)` trong mọi Feign wrapper method. Cập nhật fallback để extract actual error message từ FeignException.contentUTF8() |
+| `saleUnit` lưu tiếng Việt ("phần") → inventory-service 400 Jackson error | `OrderItem.saleUnit` là String, frontend gửi "phần" thay vì enum value "PORTION". `OrderDeductionRequest.saleUnit` là `SaleUnit` enum → Jackson fails | Thêm `@JsonAlias({"phần","Phần",...})` vào SaleUnit enum (backward-compat). Sửa frontend `SALE_UNITS` dùng `{value:"PORTION", label:"Phần"}` — gửi enum value thay label |
+| Internal Feign endpoint bị 403 dù SecurityConfig `.permitAll()` | `@PreAuthorize` ở method level override URL-level `.permitAll()`. Scheduler/Feign không có JWT → method-level check fail | Bỏ `@PreAuthorize` khỏi endpoint nội bộ (e.g. `/deductions/order`). Handle nullable `Jwt jwt` bằng: `String performer = (jwt != null) ? jwt.getSubject() : "service-name"` |
+| Trang chi tiết booking "Không tìm thấy booking" | `GET /api/v1/bookings/{bookingCode}` chỉ nhận `bookingCode` (chuỗi), không có endpoint tra theo `id` số. Trang danh sách link bằng `b.id` thay vì `b.bookingCode` | Link sang trang chi tiết bằng `b.bookingCode`. Action PATCH/POST (`/complete`, `/checkout-to-order`, ...) vẫn dùng numeric `booking.id` lấy SAU khi fetch chi tiết thành công, không phải từ route param |
+| Next.js Server Component fetch "không tìm thấy" dù API trả 200 | `NEXT_PUBLIC_API_URL=/api/v1` là relative URL → Node.js `fetch()` throws `TypeError: Invalid URL`, bị silent `catch { return null; }` | Trong Server Component dùng: `process.env.BACKEND_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api/v1"` |
+| Next.js source thay đổi nhưng browser vẫn chạy code cũ | `.next/` cache phục vụ bundle đã compile cũ dù source đã sửa — HMR không rebuild đúng trong một số trường hợp | Xóa `.next/` và restart: `cd front-end && rm -rf .next && npm run dev` |
+| Buttons hoạt động trong DevTools nhưng không bấm được trên điện thoại thật | (1) Next.js 15 thiếu `viewport` export. (2) Thiếu `touch-action: manipulation` + `cursor: pointer` CSS. (3) iOS Safari: `onClick` không fire trên `sticky` elements hoặc khi touch→click conversion bị block. (4) Tap target < 44px | **Pattern chuẩn cho button mobile-critical**: thêm `onPointerDown={(e) => { if (e.pointerType === "touch") { e.preventDefault(); fn(); } }}` + giữ `onClick={fn}` cho desktop. `e.preventDefault()` trên touch pointerdown ngăn browser generate compat click event (không double-fire). Áp dụng cho: hamburger, slider arrows, cart buttons. CSS: `viewport` export, `touch-action: manipulation`, `cursor: pointer`, `-webkit-tap-highlight-color: transparent` |
 
 ---
 
@@ -825,6 +836,7 @@ Error:
 | PATCH | `/{id}/confirm-cash` | ADMIN | Xác nhận CASH (trừ kho, khách trả khi đến) |
 | PATCH | `/{id}/complete` | EMPLOYEE+ | Hoàn thành booking |
 | PATCH | `/{id}/cancel` | ADMIN | Hủy booking + hoàn kho |
+| PATCH | `/cancel/{bookingCode}` | **Public** | Khách tự hủy (chỉ PENDING_PAYMENT); body: `{customerPhone, cancelReason}` |
 | POST | `/{id}/checkout-to-order` | EMPLOYEE+ | Chuyển booking thành order tại bàn |
 | GET | `/stats` | ADMIN | Thống kê booking: pending, confirmed hôm nay, sắp tới 2h |
 
@@ -839,6 +851,79 @@ Error:
 | GET | `/` | ADMIN | Danh sách giao dịch |
 | GET | `/revenue?from=&to=` | ADMIN | Doanh thu theo khoảng thời gian (dùng cho dashboard) |
 | POST | `/webhook/sepay` | **Public** | Webhook từ Sepay (auto-confirm BANK_TRANSFER) |
+
+### HR Service → `localhost:8080/api/v1/hr`
+
+**Employees** (`/hr/employees`) — ROLE_ADMIN
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/employees?page=&size=&search=` | Danh sách nhân viên (paginated) |
+| GET | `/employees/{id}` | Chi tiết nhân viên |
+| GET | `/employees/by-user/{userId}` | Tìm Employee theo userId (liên kết user-service ↔ hr-service) |
+| POST | `/employees` | Tạo nhân viên (name*, phone, telegramId, type*, salaryType*, baseValue*, targetDays nếu FIXED, userId optional) |
+| PUT | `/employees/{id}` | Cập nhật thông tin |
+| PATCH | `/employees/{id}/deactivate` | Vô hiệu hóa |
+| PATCH | `/employees/{id}/activate` | Kích hoạt lại |
+| PATCH | `/employees/{id}/link-telegram` | Liên kết Telegram (body: `{telegramId: Long}`) |
+
+**Shifts** (`/hr/shifts`) — ROLE_ADMIN
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/shifts` | Danh sách ca làm |
+| GET | `/shifts/{id}` | Chi tiết ca |
+| POST | `/shifts` | Tạo ca (name*, startTime*, endTime*) |
+| PUT | `/shifts/{id}` | Cập nhật ca |
+| DELETE | `/shifts/{id}` | Vô hiệu hóa ca (không xóa thật) |
+| POST | `/shifts/assign` | Phân ca (employeeId*, shiftId*, daysOfWeek* List, effectiveFrom*, effectiveTo nullable) |
+| GET | `/shifts/assignments?employeeId=` | Phân ca của một nhân viên |
+| GET | `/shifts/schedule?weekOffset=` | Lịch tuần (weekOffset=0 là tuần này) |
+| DELETE | `/shifts/assignments/{assignmentId}` | Hủy một phân ca cụ thể (set active=false) |
+
+**Attendance** (`/hr/attendance`) — ROLE_ADMIN
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/attendance?employeeId=&month=&year=&page=&size=` | Bảng chấm công |
+| GET | `/attendance/{id}` | Chi tiết một bản ghi |
+| PATCH | `/attendance/{id}` | Sửa giờ (field: "checkInTime"\|"checkOutTime", newTime ISO-8601, reason) |
+| POST | `/attendance/{id}/punish` | Ghi phạt (amount: Double, reason*) |
+| DELETE | `/attendance/{id}/punish` | Xóa khoản phạt |
+
+**Payroll** (`/hr/payroll`) — ROLE_ADMIN
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/payroll?month=&year=` | Bảng lương tất cả NV (trả `List`, không phải `Page`) |
+| GET | `/payroll/{employeeId}?month=&year=` | Lương của một nhân viên |
+
+**Verify** (`/hr/verify`) — **Public**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/verify?token=` | Check-in/check-out via WiFi nội bộ. Trả HTML trực tiếp (không qua FormRestResponse). Token do HRTelegramBot generate (HMAC-signed). |
+
+**HRTelegramBot** — cấu hình trong `hr-service/application.properties`:
+```properties
+hr.telegram.bot.token=<token>
+hr.telegram.bot.username=<username>
+hr.telegram.admin-ids=123456789,987654321
+hr.wifi.allowed-ip=192.168.1.*   # hoặc "*" cho dev mode (check-in qua callback thay vì URL)
+```
+
+Bot commands (nhân viên): `/register`, `/checkin`, `/checkout`, `/swapshift`, `/myshift`, `/myattendance`, `/salary`
+Bot commands (admin): `/employees`
+
+**ShiftSwapService** — nhân viên tự đổi ca trong ngày (phải trước giờ ca ≥ 1 tiếng). Auto-approved, không cần admin duyệt. Thông báo admin qua Telegram. Không có REST endpoint — chỉ qua bot `/swapshift`.
+
+**AttendanceResponse** fields quan trọng:
+`checkInTime`, `checkOutTime`, `totalHours`, `lateMinutes`, `punished`, `punishmentAmount`, `punishmentReason`, `shiftName`, `workDate`
+
+**PayrollResponse** fields: `net`, `gross`, `totalPunishment`, `actualWorkDays`, `totalHours`, `targetDays`
+(`netSalary`/`totalDeductions` KHÔNG tồn tại — đây là pitfall phổ biến)
+
+---
 
 ### Dashboard Service → `localhost:8080/api/v1/dashboard`
 

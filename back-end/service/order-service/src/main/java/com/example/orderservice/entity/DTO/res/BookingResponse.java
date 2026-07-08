@@ -22,8 +22,10 @@ public class BookingResponse {
     private Long tableId;
     private String tableName;
     private Instant scheduledTime;
+    private Integer guestCount;
     private BookingStatus status;
     private Double totalAmount;
+    private Double paidAmount;
     private String stockWarning;
     private String cancelReason;
     private String note;
@@ -43,8 +45,10 @@ public class BookingResponse {
                 .tableId(b.getDiningTable() != null ? b.getDiningTable().getId() : null)
                 .tableName(b.getDiningTable() != null ? b.getDiningTable().getName() : null)
                 .scheduledTime(b.getScheduledTime())
+                .guestCount(b.getGuestCount())
                 .status(b.getStatus())
                 .totalAmount(b.getTotalAmount())
+                .paidAmount(b.getPaidAmount())
                 .stockWarning(b.getStockWarning())
                 .cancelReason(b.getCancelReason())
                 .note(b.getNote())

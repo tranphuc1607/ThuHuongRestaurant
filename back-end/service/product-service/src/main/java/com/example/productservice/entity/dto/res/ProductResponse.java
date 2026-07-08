@@ -29,6 +29,8 @@ public class ProductResponse {
 
     private ProductStatus status;
 
+    private String saleUnit;
+
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+7")
     private Instant createdAt;
 
@@ -48,6 +50,7 @@ public class ProductResponse {
                 .imageUrl(product.getImageUrl())
                 .category(product.getCategory())
                 .status(product.getStatus())
+                .saleUnit(product.getSaleUnit() != null ? product.getSaleUnit() : "PORTION")
                 .createdAt(product.getCreatedAt())
                 .updatedAt(product.getUpdatedAt())
                 .createdBy(product.getCreatedBy())

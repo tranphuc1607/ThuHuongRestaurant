@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
@@ -92,9 +93,8 @@ public class ShiftService {
 
         List<ShiftAssignment> created = new ArrayList<>();
         for (DayOfWeek day : req.getDaysOfWeek()) {
-            // Vô hiệu hóa phân ca cũ cùng ngày (nếu có)
-            shiftAssignmentRepository.findActiveByEmployeeAndDay(
-                    employee.getId(), day, req.getEffectiveFrom())
+            // Chỉ deactivate nếu cùng ca + cùng ngày (cho phép nhiều ca khác nhau cùng ngày)
+            shiftAssignmentRepository.findDuplicate(employee.getId(), shift.getId(), day)
                     .forEach(sa -> {
                         sa.setActive(false);
                         shiftAssignmentRepository.save(sa);
@@ -119,10 +119,46 @@ public class ShiftService {
 
     // Lịch tuần: offset = 0 (tuần này), 1 (tuần sau), -1 (tuần trước)
     public List<ShiftAssignmentResponse> getWeekSchedule(int weekOffset) {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"));
         LocalDate weekStart = today.with(DayOfWeek.MONDAY).plusWeeks(weekOffset);
-        return shiftAssignmentRepository.findAllActiveForDate(weekStart)
+        LocalDate weekEnd = weekStart.plusDays(6);
+        return shiftAssignmentRepository.findAllActiveForWeek(weekStart, weekEnd)
                 .stream().map(ShiftAssignmentResponse::from).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void cancelAssignment(Long assignmentId) throws MessageException {
+        ShiftAssignment assignment = shiftAssignmentRepository.findById(assignmentId)
+                .orElseThrow(() -> new MessageException("Không tìm thấy phân ca với ID: " + assignmentId));
+        assignment.setActive(false);
+        shiftAssignmentRepository.save(assignment);
+    }
+
+    @Transactional
+    public int clearWeekAssignments(Long employeeId, int weekOffset) throws MessageException {
+        employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new MessageException("Không tìm thấy nhân viên"));
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"));
+        LocalDate weekStart = today.with(DayOfWeek.MONDAY).plusWeeks(weekOffset);
+        LocalDate weekEnd = weekStart.plusDays(6);
+        List<ShiftAssignment> active = shiftAssignmentRepository.findActiveByEmployeeForWeek(employeeId, weekStart, weekEnd);
+        active.forEach(sa -> {
+            sa.setActive(false);
+            shiftAssignmentRepository.save(sa);
+        });
+        return active.size();
+    }
+
+    @Transactional
+    public int clearAllAssignments(Long employeeId) throws MessageException {
+        employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new MessageException("Không tìm thấy nhân viên"));
+        List<ShiftAssignment> active = shiftAssignmentRepository.findActiveByEmployee(employeeId);
+        active.forEach(sa -> {
+            sa.setActive(false);
+            shiftAssignmentRepository.save(sa);
+        });
+        return active.size();
     }
 
     public Shift findById(Long id) throws MessageException {

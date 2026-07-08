@@ -48,6 +48,9 @@ public class OrderItem extends BaseEntity {
     @Column(name = "item_total", nullable = false)
     private Double itemTotal;
 
+    @Column(name = "category", length = 30)
+    private String category;
+
     @Column(name = "from_booking", nullable = false)
     @Builder.Default
     private boolean fromBooking = false;

@@ -16,6 +16,7 @@ import com.example.orderservice.entity.DTO.res.OrderResponse;
 import com.example.orderservice.entity.DTO.res.PaymentInfoResponse;
 import com.example.orderservice.entity.enums.BookingPaymentMethod;
 import com.example.orderservice.entity.enums.BookingStatus;
+import com.example.orderservice.entity.enums.OrderStatus;
 import com.example.orderservice.entity.enums.TableStatus;
 import com.example.orderservice.repository.BookingItemRepository;
 import com.example.orderservice.repository.BookingRepository;
@@ -36,6 +37,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.net.URLEncoder;
+import java.util.concurrent.CompletableFuture;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -78,19 +80,30 @@ public class BookingService {
 
     @Transactional
     public BookingResponse createBooking(CreateBookingRequest req) throws MessageException {
+        return createBooking(req, null);
+    }
+
+    @Transactional
+    public BookingResponse createBooking(CreateBookingRequest req, String ownerUsername) throws MessageException {
         validateScheduledTime(req.getScheduledTime());
 
         DiningTable table = null;
         if (req.getTableId() != null) {
             table = tableRepository.findById(req.getTableId())
                     .orElseThrow(() -> new MessageException("Không tìm thấy bàn với id: " + req.getTableId()));
+            checkTableConflict(req.getTableId(), req.getScheduledTime());
         }
 
         List<BookingItem> items = buildItems(req);
         double total = items.stream().mapToDouble(BookingItem::getItemTotal).sum();
 
+        if (total <= 0) {
+            throw new MessageException("Vui lòng chọn ít nhất một món để đặt bàn");
+        }
+
         String code = generateBookingCode();
 
+        // Cả CASH và BANK_TRANSFER đều bắt đầu PENDING_PAYMENT — admin xác nhận thủ công
         Booking booking = Booking.builder()
                 .bookingCode(code)
                 .customerName(req.getCustomerName())
@@ -100,6 +113,10 @@ public class BookingService {
                 .scheduledTime(req.getScheduledTime())
                 .totalAmount(total)
                 .note(req.getNote())
+                .guestCount(req.getGuestCount())
+                .paymentMethod(req.getPaymentMethod())
+                .status(BookingStatus.PENDING_PAYMENT)
+                .ownerUsername(ownerUsername)
                 .build();
 
         booking = bookingRepository.save(booking);
@@ -110,7 +127,15 @@ public class BookingService {
         bookingItemRepository.saveAll(items);
         booking.setItems(items);
 
-        PaymentInfoResponse paymentInfo = buildPaymentInfo(code, total);
+        // Notify admin qua Telegram (async, không block response)
+        final Booking savedBooking = booking;
+        CompletableFuture.runAsync(() -> {
+            try { bookingAdminBot.notifyNewBooking(savedBooking); }
+            catch (Exception e) { log.warn("[createBooking] Telegram notify thất bại: {}", e.getMessage()); }
+        });
+
+        boolean isCash = req.getPaymentMethod() == BookingPaymentMethod.CASH;
+        PaymentInfoResponse paymentInfo = isCash ? null : buildPaymentInfo(code, total);
         return BookingResponse.fromWithPayment(booking, paymentInfo);
     }
 
@@ -143,6 +168,7 @@ public class BookingService {
 
         booking.setStatus(BookingStatus.CONFIRMED);
         booking.setPaymentMethod(BookingPaymentMethod.BANK_TRANSFER);
+        booking.setPaidAmount(booking.getTotalAmount()); // ghi nhận số tiền đã nhận
         booking.setCreatedBy(confirmedBy);
         bookingRepository.save(booking);
 
@@ -166,18 +192,23 @@ public class BookingService {
                         .build())
                 .collect(Collectors.toList());
 
+        String stockWarning = null;
         try {
             inventoryServiceClient.deductForOrder(OrderDeductionPayload.builder()
                     .orderId(booking.getBookingCode())
                     .items(deductionItems)
                     .build());
         } catch (Exception e) {
-            throw new MessageException("Lỗi trừ kho: " + extractErrorMessage(e));
+            // CASH booking: cảnh báo nhưng vẫn confirm (khách chưa thanh toán, admin quyết định)
+            stockWarning = "Cảnh báo kho: " + extractErrorMessage(e);
+            log.warn("[confirmCashBooking] Trừ kho thất bại cho booking {}: {}", booking.getBookingCode(), stockWarning);
         }
 
         booking.setStatus(BookingStatus.CONFIRMED);
         booking.setPaymentMethod(BookingPaymentMethod.CASH);
+        booking.setPaidAmount(0.0); // CASH = chưa trả tiền trước
         booking.setCreatedBy(confirmedBy);
+        if (stockWarning != null) booking.setStockWarning(stockWarning);
         bookingRepository.save(booking);
 
         bookingAdminBot.notifyConfirmed(booking, confirmedBy);
@@ -188,8 +219,8 @@ public class BookingService {
     public BookingResponse completeBooking(Long id) throws MessageException {
         Booking booking = findById(id);
 
-        if (booking.getStatus() != BookingStatus.CONFIRMED) {
-            throw new MessageException("Chỉ có thể hoàn thành booking ở trạng thái CONFIRMED");
+        if (booking.getStatus() != BookingStatus.CONFIRMED && booking.getStatus() != BookingStatus.CHECKED_IN) {
+            throw new MessageException("Chỉ có thể hoàn thành booking ở trạng thái CONFIRMED hoặc CHECKED_IN");
         }
 
         booking.setStatus(BookingStatus.COMPLETED);
@@ -235,6 +266,99 @@ public class BookingService {
         return BookingResponse.from(booking);
     }
 
+    @Transactional
+    public BookingResponse removeBookingItem(Long bookingId, Long itemId) throws MessageException {
+        Booking booking = findWithItems(bookingId);
+
+        if (booking.getStatus() == BookingStatus.COMPLETED
+                || booking.getStatus() == BookingStatus.CANCELLED
+                || booking.getStatus() == BookingStatus.EXPIRED
+                || booking.getStatus() == BookingStatus.CHECKED_IN) {
+            throw new MessageException("Không thể xóa món ở trạng thái: " + booking.getStatus());
+        }
+
+        BookingItem item = booking.getItems().stream()
+                .filter(i -> i.getId().equals(itemId))
+                .findFirst()
+                .orElseThrow(() -> new MessageException("Không tìm thấy món với id: " + itemId));
+
+        if (booking.getStatus() == BookingStatus.CONFIRMED) {
+            OrderDeductionPayload restorePayload = OrderDeductionPayload.builder()
+                    .orderId(booking.getBookingCode())
+                    .items(List.of(OrderDeductionPayload.OrderItem.builder()
+                            .productId(item.getProductId())
+                            .quantity(item.getQuantity())
+                            .saleUnit(item.getSaleUnit())
+                            .build()))
+                    .build();
+            try {
+                inventoryServiceClient.restoreForBooking(restorePayload);
+            } catch (Exception e) {
+                log.warn("Không thể hoàn kho khi xóa món {} khỏi booking {}: {}", item.getProductName(), booking.getBookingCode(), e.getMessage());
+            }
+        }
+
+        booking.getItems().remove(item);
+        bookingItemRepository.delete(item);
+
+        double newTotal = booking.getItems().stream().mapToDouble(BookingItem::getItemTotal).sum();
+        booking.setTotalAmount(newTotal);
+        bookingRepository.save(booking);
+
+        return BookingResponse.from(booking);
+    }
+
+    @Transactional
+    public BookingResponse updateBookingItemQty(Long bookingId, Long itemId, int newQty) throws MessageException {
+        Booking booking = findWithItems(bookingId);
+
+        if (booking.getStatus() == BookingStatus.COMPLETED
+                || booking.getStatus() == BookingStatus.CANCELLED
+                || booking.getStatus() == BookingStatus.EXPIRED
+                || booking.getStatus() == BookingStatus.CHECKED_IN) {
+            throw new MessageException("Không thể chỉnh sửa món ở trạng thái: " + booking.getStatus());
+        }
+
+        BookingItem item = booking.getItems().stream()
+                .filter(i -> i.getId().equals(itemId))
+                .findFirst()
+                .orElseThrow(() -> new MessageException("Không tìm thấy món với id: " + itemId));
+
+        int oldQty = item.getQuantity();
+        int delta = newQty - oldQty;
+
+        if (delta != 0 && booking.getStatus() == BookingStatus.CONFIRMED) {
+            OrderDeductionPayload.OrderItem deltaItem = OrderDeductionPayload.OrderItem.builder()
+                    .productId(item.getProductId())
+                    .quantity(Math.abs(delta))
+                    .saleUnit(item.getSaleUnit())
+                    .build();
+            OrderDeductionPayload payload = OrderDeductionPayload.builder()
+                    .orderId(booking.getBookingCode())
+                    .items(List.of(deltaItem))
+                    .build();
+            try {
+                if (delta > 0) {
+                    inventoryServiceClient.deductForOrder(payload);
+                } else {
+                    inventoryServiceClient.restoreForBooking(payload);
+                }
+            } catch (Exception e) {
+                throw new MessageException("Lỗi cập nhật kho: " + extractErrorMessage(e));
+            }
+        }
+
+        item.setQuantity(newQty);
+        item.setItemTotal(item.getProductPrice() * newQty);
+        bookingItemRepository.save(item);
+
+        double newTotal = booking.getItems().stream().mapToDouble(BookingItem::getItemTotal).sum();
+        booking.setTotalAmount(newTotal);
+        bookingRepository.save(booking);
+
+        return BookingResponse.from(booking);
+    }
+
     @Transactional(readOnly = true)
     public BookingResponse getByCode(String bookingCode) throws MessageException {
         Booking booking = bookingRepository.findByBookingCode(bookingCode)
@@ -249,11 +373,11 @@ public class BookingService {
 
     @Transactional(readOnly = true)
     public Page<BookingResponse> getAll(int page, int size, BookingStatus status,
-                                        Instant from, Instant to) {
-        PageRequest pageable = PageRequest.of(page, size, Sort.by("scheduledTime").ascending());
+                                        Instant from, Instant to, boolean excludePending) {
+        PageRequest pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
 
         if (status != null && from != null && to != null) {
-            return bookingRepository.findByStatus(status, pageable).map(BookingResponse::from);
+            return bookingRepository.findByStatusAndScheduledTimeBetween(status, from, to, pageable).map(BookingResponse::from);
         }
         if (from != null && to != null) {
             return bookingRepository.findByScheduledTimeBetween(from, to, pageable).map(BookingResponse::from);
@@ -261,12 +385,25 @@ public class BookingService {
         if (status != null) {
             return bookingRepository.findByStatus(status, pageable).map(BookingResponse::from);
         }
+        if (excludePending) {
+            return bookingRepository.findByStatusNotIn(
+                    List.of(BookingStatus.PENDING_PAYMENT, BookingStatus.EXPIRED), pageable)
+                    .map(BookingResponse::from);
+        }
         return bookingRepository.findAll(pageable).map(BookingResponse::from);
     }
 
+    @Transactional(readOnly = true)
     public Page<BookingResponse> getBookingsByPhone(String phone, int page, int size) {
         return bookingRepository.findByCustomerPhoneOrderByCreatedAtDesc(
                 phone, PageRequest.of(page, size))
+                .map(BookingResponse::from);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<BookingResponse> getMyBookings(String username, int page, int size) {
+        return bookingRepository.findByOwnerUsernameOrderByCreatedAtDesc(
+                username, PageRequest.of(page, size))
                 .map(BookingResponse::from);
     }
 
@@ -313,28 +450,28 @@ public class BookingService {
         }
 
         // Ưu tiên bàn staff chọn lúc check-in, nếu không dùng bàn đã đặt trước
-        DiningTable table;
+        DiningTable table = null;
         if (overrideTableId != null) {
             table = tableRepository.findById(overrideTableId)
                     .orElseThrow(() -> new MessageException("Không tìm thấy bàn với id: " + overrideTableId));
-        } else {
+        } else if (booking.getDiningTable() != null) {
             table = booking.getDiningTable();
-            if (table == null) {
-                throw new MessageException("Vui lòng chỉ định bàn cho booking này");
-            }
         }
+        // table == null → order không gắn bàn, staff assign bàn sau
 
         String note = "Từ booking " + booking.getBookingCode()
                 + (booking.getNote() != null ? " - " + booking.getNote() : "");
 
         boolean isCash = BookingPaymentMethod.CASH.equals(booking.getPaymentMethod());
-        // BANK_TRANSFER: khách đã trả trước → totalAmount=0, prepaid=booking.total
-        // CASH: chưa trả → totalAmount=booking.total, prepaid=0 (thu tiền khi ăn)
+        // totalAmount = tổng món hiện tại (có thể admin đã giảm sau khi confirm)
+        // prepaidAmount = số tiền THỰC SỰ đã nhận (paidAmount, không đổi dù xóa món)
+        double paid = booking.getPaidAmount() != null ? booking.getPaidAmount() : 0.0;
         Order order = Order.builder()
                 .diningTable(table)
-                .totalAmount(isCash ? booking.getTotalAmount() : 0.0)
-                .prepaidAmount(isCash ? 0.0 : booking.getTotalAmount())
+                .totalAmount(booking.getTotalAmount())
+                .prepaidAmount(isCash ? 0.0 : paid)
                 .note(note)
+                .guestCount(booking.getGuestCount())
                 .build();
         order.setCreatedBy(createdBy);
         order = orderRepository.save(order);
@@ -358,9 +495,11 @@ public class BookingService {
         orderItemRepository.saveAll(orderItems);
         order.setItems(orderItems);
 
-        table.setStatus(TableStatus.OCCUPIED);
-        tableRepository.save(table);
-
+        // Luôn để OPEN — nhân viên thêm món khách gọi thêm hoặc xử lý hoàn tiền rồi checkout
+        if (table != null) {
+            table.setStatus(TableStatus.OCCUPIED);
+            tableRepository.save(table);
+        }
         booking.setStatus(BookingStatus.CHECKED_IN);
         bookingRepository.save(booking);
 
@@ -398,6 +537,7 @@ public class BookingService {
 
         booking.setStatus(BookingStatus.CONFIRMED);
         booking.setPaymentMethod(BookingPaymentMethod.BANK_TRANSFER);
+        booking.setPaidAmount(booking.getTotalAmount()); // ghi nhận số tiền đã nhận qua Sepay
         booking.setCreatedBy("BANK_TRANSFER");
         bookingRepository.save(booking);
 
@@ -451,8 +591,14 @@ public class BookingService {
 
     @SuppressWarnings("unchecked")
     private List<BookingItem> buildItems(CreateBookingRequest req) throws MessageException {
+        if (req.getItems() == null || req.getItems().isEmpty()) return new ArrayList<>();
+        return buildItemsFromList(req.getItems());
+    }
+
+    private List<BookingItem> buildItemsFromList(List<com.example.orderservice.entity.DTO.req.CreateBookingItemRequest> itemReqs) throws MessageException {
         List<BookingItem> items = new ArrayList<>();
-        for (var itemReq : req.getItems()) {
+        if (itemReqs == null || itemReqs.isEmpty()) return items;
+        for (var itemReq : itemReqs) {
             Map<String, Object> productResponse;
             try {
                 productResponse = productServiceClient.getProduct(itemReq.getProductId());
@@ -480,6 +626,92 @@ public class BookingService {
                     .build());
         }
         return items;
+    }
+
+    @Transactional
+    public BookingResponse updateItems(String bookingCode, List<com.example.orderservice.entity.DTO.req.CreateBookingItemRequest> newItems) throws MessageException {
+        Booking booking = bookingRepository.findByBookingCode(bookingCode)
+                .orElseThrow(() -> new MessageException("Không tìm thấy đặt bàn: " + bookingCode));
+
+        if (booking.getStatus() != BookingStatus.PENDING_PAYMENT && booking.getStatus() != BookingStatus.CONFIRMED) {
+            throw new MessageException("Không thể chỉnh sửa món khi đặt bàn ở trạng thái: " + booking.getStatus());
+        }
+
+        boolean isConfirmed = booking.getStatus() == BookingStatus.CONFIRMED;
+
+        // Hoàn kho các món cũ — CHỈ khi CONFIRMED (kho đã bị trừ ở bước confirm)
+        // PENDING_PAYMENT: kho chưa bị trừ lần nào → không được gọi restore
+        List<BookingItem> oldItems = booking.getItems();
+        if (!oldItems.isEmpty()) {
+            if (isConfirmed) {
+                try {
+                    inventoryServiceClient.restoreForBooking(OrderDeductionPayload.builder()
+                            .orderId(bookingCode)
+                            .items(oldItems.stream().map(i -> OrderDeductionPayload.OrderItem.builder()
+                                    .productId(i.getProductId())
+                                    .quantity(i.getQuantity())
+                                    .saleUnit(i.getSaleUnit())
+                                    .build()).collect(Collectors.toList()))
+                            .build());
+                } catch (Exception e) {
+                    log.warn("[updateItems] Không thể hoàn kho cũ {}: {}", bookingCode, e.getMessage());
+                }
+            }
+            bookingItemRepository.deleteAll(oldItems);
+            booking.getItems().clear();
+        }
+
+        // Build & lưu items mới
+        List<BookingItem> items = buildItemsFromList(newItems);
+        // Chỉ trừ kho nếu CONFIRMED — PENDING_PAYMENT sẽ trừ khi admin confirm
+        if (!items.isEmpty() && isConfirmed) {
+            try {
+                inventoryServiceClient.deductForOrder(OrderDeductionPayload.builder()
+                        .orderId(bookingCode)
+                        .items(items.stream().map(i -> OrderDeductionPayload.OrderItem.builder()
+                                .productId(i.getProductId())
+                                .quantity(i.getQuantity())
+                                .saleUnit(i.getSaleUnit())
+                                .build()).collect(Collectors.toList()))
+                        .build());
+            } catch (Exception e) {
+                throw new MessageException(extractErrorMessage(e));
+            }
+        }
+
+        for (BookingItem item : items) item.setBooking(booking);
+        bookingItemRepository.saveAll(items);
+        booking.setItems(items);
+
+        double total = items.stream().mapToDouble(BookingItem::getItemTotal).sum();
+        booking.setTotalAmount(total);
+        bookingRepository.save(booking);
+
+        PaymentInfoResponse paymentInfo = (booking.getPaymentMethod() == BookingPaymentMethod.BANK_TRANSFER && total > 0)
+                ? buildPaymentInfo(bookingCode, total) : null;
+        return BookingResponse.fromWithPayment(booking, paymentInfo);
+    }
+
+    @Transactional
+    public BookingResponse switchPaymentMethod(String bookingCode, com.example.orderservice.entity.DTO.req.SwitchPaymentRequest req) throws MessageException {
+        Booking booking = bookingRepository.findByBookingCode(bookingCode)
+                .orElseThrow(() -> new MessageException("Không tìm thấy đặt bàn"));
+        if (booking.getStatus() != BookingStatus.PENDING_PAYMENT) {
+            throw new MessageException("Chỉ có thể đổi phương thức khi đặt bàn đang chờ thanh toán");
+        }
+        if (booking.getPaymentMethod() == req.getPaymentMethod()) {
+            PaymentInfoResponse paymentInfo = (req.getPaymentMethod() == BookingPaymentMethod.BANK_TRANSFER && booking.getTotalAmount() > 0)
+                    ? buildPaymentInfo(bookingCode, booking.getTotalAmount()) : null;
+            return BookingResponse.fromWithPayment(booking, paymentInfo);
+        }
+        booking.setPaymentMethod(req.getPaymentMethod());
+        bookingRepository.save(booking);
+        CompletableFuture.runAsync(() -> {
+            try { bookingAdminBot.notifyPaymentMethodChanged(booking); } catch (Exception ignored) {}
+        });
+        PaymentInfoResponse paymentInfo = (req.getPaymentMethod() == BookingPaymentMethod.BANK_TRANSFER && booking.getTotalAmount() > 0)
+                ? buildPaymentInfo(bookingCode, booking.getTotalAmount()) : null;
+        return BookingResponse.fromWithPayment(booking, paymentInfo);
     }
 
     private synchronized String generateBookingCode() {
@@ -544,17 +776,28 @@ public class BookingService {
     }
 
     @Transactional(readOnly = true)
-    public BookingStatsResponse getStats() {
+    public BookingStatsResponse getStats(LocalDate dateParam) {
         ZoneId vn = ZoneId.of("Asia/Ho_Chi_Minh");
         Instant now = Instant.now();
-        Instant todayStart = LocalDate.now(vn).atStartOfDay(vn).toInstant();
-        Instant todayEnd   = LocalDate.now(vn).plusDays(1).atStartOfDay(vn).toInstant();
-        Instant in2Hours   = now.plus(2, ChronoUnit.HOURS);
+        LocalDate date = dateParam != null ? dateParam : LocalDate.now(vn);
+        boolean isToday = date.equals(LocalDate.now(vn));
+
+        Instant dayStart = date.atStartOfDay(vn).toInstant();
+        Instant dayEnd   = date.plusDays(1).atStartOfDay(vn).toInstant();
+        Instant in2Hours = now.plus(2, ChronoUnit.HOURS);
+
+        long pendingPayment = isToday
+                ? bookingRepository.countPendingPayment()
+                : bookingRepository.countPendingInRange(dayStart, dayEnd);
+        long confirmedCount = bookingRepository.countConfirmedInRange(dayStart, dayEnd);
+        long upcomingIn2Hours = isToday
+                ? bookingRepository.countUpcomingConfirmed(now, in2Hours)
+                : bookingRepository.countActiveInRange(dayStart, dayEnd);
 
         return BookingStatsResponse.builder()
-                .pendingPayment(bookingRepository.countPendingPayment())
-                .confirmedToday(bookingRepository.countConfirmedInRange(todayStart, todayEnd))
-                .upcomingIn2Hours(bookingRepository.countUpcomingConfirmed(now, in2Hours))
+                .pendingPayment(pendingPayment)
+                .confirmedToday(confirmedCount)
+                .upcomingIn2Hours(upcomingIn2Hours)
                 .build();
     }
 

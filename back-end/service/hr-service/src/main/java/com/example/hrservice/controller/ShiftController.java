@@ -65,4 +65,24 @@ public class ShiftController {
             @RequestParam(defaultValue = "0") int weekOffset) {
         return ResponseEntity.ok(shiftService.getWeekSchedule(weekOffset));
     }
+
+    @DeleteMapping("/assignments/{assignmentId}")
+    public ResponseEntity<Map<String, String>> cancelAssignment(@PathVariable Long assignmentId) throws MessageException {
+        shiftService.cancelAssignment(assignmentId);
+        return ResponseEntity.ok(Map.of("message", "Đã hủy phân ca"));
+    }
+
+    @DeleteMapping("/assignments/employee/{employeeId}")
+    public ResponseEntity<Map<String, Object>> clearEmployeeAssignments(@PathVariable Long employeeId) throws MessageException {
+        int count = shiftService.clearAllAssignments(employeeId);
+        return ResponseEntity.ok(Map.of("message", "Đã xóa toàn bộ lịch làm", "count", count));
+    }
+
+    @DeleteMapping("/assignments/employee/{employeeId}/week")
+    public ResponseEntity<Map<String, Object>> clearEmployeeWeekAssignments(
+            @PathVariable Long employeeId,
+            @RequestParam(defaultValue = "0") int weekOffset) throws MessageException {
+        int count = shiftService.clearWeekAssignments(employeeId, weekOffset);
+        return ResponseEntity.ok(Map.of("message", "Đã xóa lịch tuần", "count", count));
+    }
 }

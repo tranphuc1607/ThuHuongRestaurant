@@ -1,9 +1,12 @@
 package com.example.paymentservice.controller;
 
+import com.example.paymentservice.entity.DTO.req.ChangePaymentMethodRequest;
 import com.example.paymentservice.entity.DTO.req.CreatePaymentRequest;
+import com.example.paymentservice.entity.DTO.req.CustomerPaymentRequest;
 import com.example.paymentservice.entity.DTO.req.SepayWebhookPayload;
 import com.example.paymentservice.entity.DTO.res.PaymentResponse;
 import com.example.paymentservice.entity.DTO.res.RevenueResponse;
+import com.example.paymentservice.entity.DTO.res.RevenuePeriodDto;
 import com.example.paymentservice.entity.enums.PaymentMethod;
 import com.example.paymentservice.entity.enums.PaymentStatus;
 import com.example.paymentservice.service.PaymentService;
@@ -21,6 +24,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -40,6 +44,14 @@ public class PaymentController {
             @RequestBody @Valid CreatePaymentRequest req,
             @AuthenticationPrincipal Jwt jwt) throws MessageException {
         return ResponseEntity.ok(paymentService.createPayment(req, jwt.getSubject()));
+    }
+
+    @PatchMapping("/{id}/change-method")
+    @PreAuthorize("hasAuthority('ROLE_EMPLOYEE') or hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<PaymentResponse> changePaymentMethod(
+            @PathVariable Long id,
+            @RequestBody @Valid ChangePaymentMethodRequest req) throws MessageException {
+        return ResponseEntity.ok(paymentService.changePaymentMethod(id, req.getNewMethod()));
     }
 
     @PatchMapping("/{id}/confirm")
@@ -62,8 +74,25 @@ public class PaymentController {
         return ResponseEntity.ok(paymentService.getByOrderId(orderId));
     }
 
+    @GetMapping("/orders/{orderId}/all")
+    @PreAuthorize("hasAuthority('ROLE_EMPLOYEE') or hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<List<PaymentResponse>> getAllByOrderId(@PathVariable Long orderId) {
+        return ResponseEntity.ok(paymentService.getAllByOrderId(orderId));
+    }
+
+    @PostMapping("/orders/{orderId}/refund")
+    @PreAuthorize("hasAuthority('ROLE_EMPLOYEE') or hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<PaymentResponse> processRefund(
+            @PathVariable Long orderId,
+            @RequestBody(required = false) Map<String, Object> body,
+            @AuthenticationPrincipal Jwt jwt) throws MessageException {
+        Double amount = body != null && body.get("amount") instanceof Number n ? n.doubleValue() : null;
+        String note = body != null && body.get("note") instanceof String s ? s : null;
+        return ResponseEntity.ok(paymentService.processRefund(orderId, amount, note, jwt.getSubject()));
+    }
+
     @GetMapping
-    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    @PreAuthorize("hasAuthority('ROLE_EMPLOYEE') or hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<Page<PaymentResponse>> getAll(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -72,12 +101,43 @@ public class PaymentController {
         return ResponseEntity.ok(paymentService.getAll(page, size, status, method));
     }
 
+    @GetMapping("/today")
+    @PreAuthorize("hasAuthority('ROLE_EMPLOYEE') or hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<Page<PaymentResponse>> getToday(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size,
+            @RequestParam(required = false) PaymentStatus status) {
+        return ResponseEntity.ok(paymentService.getToday(page, size, status));
+    }
+
     @GetMapping("/revenue")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<RevenueResponse> getRevenue(
             @RequestParam Instant from,
             @RequestParam Instant to) {
         return ResponseEntity.ok(paymentService.getRevenue(from, to));
+    }
+
+    @GetMapping("/revenue/series")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<List<RevenuePeriodDto>> getRevenueSeries(
+            @RequestParam(defaultValue = "DAY") String groupBy,
+            @RequestParam(defaultValue = "30") int limit) throws MessageException {
+        return ResponseEntity.ok(paymentService.getRevenueSeries(groupBy, limit));
+    }
+
+    // ── Public endpoints (không cần JWT) — dành cho khách quét QR ──
+
+    @PostMapping("/customer-request")
+    public ResponseEntity<PaymentResponse> customerPaymentRequest(
+            @RequestBody CustomerPaymentRequest req) throws MessageException {
+        return ResponseEntity.ok(paymentService.createPaymentByToken(req));
+    }
+
+    @GetMapping("/customer-status/{paymentId}")
+    public ResponseEntity<Map<String, String>> getCustomerStatus(
+            @PathVariable Long paymentId) throws MessageException {
+        return ResponseEntity.ok(paymentService.getPaymentStatus(paymentId));
     }
 
     @PostMapping("/webhook/sepay")

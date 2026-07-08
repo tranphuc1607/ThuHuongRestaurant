@@ -1,15 +1,17 @@
 package com.example.authservice.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
+import org.hibernate.annotations.DynamicUpdate;
 
 @Entity
-@Table(name = "auth") 
-@Data
+@Table(name = "auth")
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
+@DynamicUpdate
 public class Auth {
 
     @Id
@@ -17,19 +19,23 @@ public class Auth {
     private Long id;
 
     @Column(unique = true, nullable = false)
-    private String username; 
+    private String username;
 
     @Column(nullable = false)
-    private String password; 
+    private String password;
 
     @Column(name = "role_name", nullable = false)
-    private String role; 
-    @Column(columnDefinition = "TEXT")
-    private String refreshToken; 
+    private String role;
 
+    @Column(columnDefinition = "TEXT")
+    private String refreshToken;
+
+    @Builder.Default
     private boolean isExpired = false;
-    
+
+    @Builder.Default
     private boolean isLocked = false;
 
-    private boolean isEnabled = true; 
+    @Builder.Default
+    private boolean isEnabled = true;
 }

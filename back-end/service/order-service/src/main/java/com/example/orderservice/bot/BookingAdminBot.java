@@ -25,6 +25,7 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 @Component
@@ -171,11 +172,20 @@ public class BookingAdminBot extends TelegramLongPollingBot {
 
     private void handleConfirmBooking(long chatId, int messageId, Long bookingId) throws Exception {
         try {
-            bookingService.confirmBooking(bookingId, "ADMIN_BOT");
-            Booking b = bookingRepository.findById(bookingId).orElse(null);
-            String info = b != null ? "\n📋 " + b.getBookingCode() + " — " + b.getCustomerName() : "";
-            editMd(chatId, messageId, "✅ *Đã xác nhận booking*" + info +
-                    "\n_Kho đã trừ. Nhắc nhở sẽ gửi trước 1 tiếng._");
+            Booking b = bookingRepository.findById(bookingId).orElseThrow(
+                    () -> new MessageException("Không tìm thấy booking #" + bookingId));
+            // Auto-detect phương thức thanh toán để gọi đúng service
+            if (BookingPaymentMethod.CASH.equals(b.getPaymentMethod())) {
+                bookingService.confirmCashBooking(bookingId, "ADMIN_BOT");
+                editMd(chatId, messageId, "✅ *Đã xác nhận đặt bàn — Tiền mặt khi đến*" +
+                        "\n📋 " + b.getBookingCode() + " — " + b.getCustomerName() +
+                        "\n💵 _Khách thanh toán tiền mặt khi đến nhà hàng._");
+            } else {
+                bookingService.confirmBooking(bookingId, "ADMIN_BOT");
+                editMd(chatId, messageId, "✅ *Đã xác nhận đặt bàn — Chuyển khoản*" +
+                        "\n📋 " + b.getBookingCode() + " — " + b.getCustomerName() +
+                        "\n_Kho đã trừ. Nhắc nhở sẽ gửi trước 1 tiếng._");
+            }
         } catch (MessageException e) {
             editMd(chatId, messageId, "❌ " + e.getMessage());
         }
@@ -194,6 +204,38 @@ public class BookingAdminBot extends TelegramLongPollingBot {
 
     // ── Push notification methods (gọi từ BookingService) ───────────────────
 
+    public void notifyNewBooking(Booking b) {
+        if (!isConfigured()) return;
+        CompletableFuture.runAsync(() -> {
+            boolean isCash = BookingPaymentMethod.CASH.equals(b.getPaymentMethod());
+            String header = isCash
+                    ? "🆕 *Đặt bàn mới — Tiền mặt khi đến*"
+                    : "🆕 *Đặt bàn mới — Chờ chuyển khoản*";
+            String note = isCash
+                    ? "\n💵 _Khách sẽ thanh toán tiền mặt khi đến nhà hàng_"
+                    : "\n💳 _Đang chờ khách chuyển khoản — nhấn Xác nhận sau khi nhận tiền_";
+            String text = buildBookingText(header, b) + note;
+
+            InlineKeyboardMarkup keyboard;
+            if (isCash) {
+                keyboard = InlineKeyboardMarkup.builder()
+                        .keyboardRow(List.of(
+                                InlineKeyboardButton.builder()
+                                        .text("❌ Hủy booking").callbackData("CANCEL_BOOKING:" + b.getId()).build()
+                        )).build();
+            } else {
+                keyboard = InlineKeyboardMarkup.builder()
+                        .keyboardRow(List.of(
+                                InlineKeyboardButton.builder()
+                                        .text("✅ Xác nhận đặt bàn").callbackData("CONFIRM_BOOKING:" + b.getId()).build(),
+                                InlineKeyboardButton.builder()
+                                        .text("❌ Hủy").callbackData("CANCEL_BOOKING:" + b.getId()).build()
+                        )).build();
+            }
+            broadcastToAdmins(text, keyboard);
+        });
+    }
+
     public void notifyConfirmed(Booking b, String confirmedBy) {
         if (!isConfigured()) return;
         boolean isCash = BookingPaymentMethod.CASH.equals(b.getPaymentMethod());
@@ -210,6 +252,17 @@ public class BookingAdminBot extends TelegramLongPollingBot {
         if (!isConfigured()) return;
         String text = buildBookingText("💳 *Booking xác nhận qua chuyển khoản*", b) +
                 "\n_Đã tự động xác nhận & trừ kho._";
+        broadcastToAdmins(text, null);
+    }
+
+    public void notifyPaymentMethodChanged(Booking b) {
+        if (!isConfigured()) return;
+        String method = BookingPaymentMethod.CASH.equals(b.getPaymentMethod()) ? "💵 Tiền mặt khi đến" : "💳 Chuyển khoản";
+        String text = "🔄 *Đổi phương thức thanh toán*\n\n" +
+                "📋 " + b.getBookingCode() + "\n" +
+                "👤 " + b.getCustomerName() + " | 📞 " + b.getCustomerPhone() + "\n" +
+                "⏰ " + DT_FMT.format(b.getScheduledTime()) + "\n" +
+                "Phương thức mới: *" + method + "*";
         broadcastToAdmins(text, null);
     }
 

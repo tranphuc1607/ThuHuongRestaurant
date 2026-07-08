@@ -32,6 +32,13 @@ public class InventoryImportController {
         return ResponseEntity.ok(inventoryImportService.importStock(req, importedBy));
     }
 
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<Void> deleteImport(@PathVariable Long id) throws MessageException {
+        inventoryImportService.deleteImport(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<Page<InventoryImportResponse>> getAll(

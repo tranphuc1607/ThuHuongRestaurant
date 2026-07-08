@@ -51,13 +51,23 @@ public class InventoryServiceFallbackFactory implements FallbackFactory<Inventor
                         String body = fe.contentUTF8();
                         if (body != null && !body.isBlank()) {
                             Map<?, ?> map = objectMapper.readValue(body, Map.class);
-                            Object msg = map.get("message");
-                            if (msg != null) return msg.toString();
+                            String msg = map.get("message") != null ? map.get("message").toString() : null;
+                            String err = map.get("error") != null ? map.get("error").toString() : null;
+                            // GlobalExceptionHandler đặt lỗi cụ thể vào "error", "message" là chuỗi generic
+                            if (msg != null && !isGenericMsg(msg)) return msg;
+                            if (err != null && !isGenericMsg(err)) return err;
+                            if (msg != null) return msg;
                         }
                     } catch (Exception ignored) {}
                     return "inventory-service trả về lỗi HTTP " + fe.status();
                 }
                 return "inventory-service tạm thời không khả dụng — vui lòng thử lại sau";
+            }
+
+            private boolean isGenericMsg(String s) {
+                return s.contains("Exception") || s.equals("Bad Request") || s.equals("OK")
+                        || s.equals("Unauthorized") || s.equals("Forbidden") || s.equals("Not Found")
+                        || s.equals("Internal Server Error");
             }
         };
     }

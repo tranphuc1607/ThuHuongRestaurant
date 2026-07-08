@@ -1,6 +1,5 @@
 package com.example.authservice.controller;
 
-import com.example.authservice.entity.Auth;
 import com.example.authservice.entity.DTO.req.LoginRequest;
 import com.example.authservice.entity.DTO.req.RegisterRequest;
 import com.example.authservice.entity.DTO.res.LoginResponse;
@@ -19,8 +18,7 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/register")
-    public ResponseEntity<Auth> register(@Valid @RequestBody RegisterRequest registerDto) throws MessageException {
-      
+    public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest registerDto) throws MessageException {
         return ResponseEntity.ok(authService.register(registerDto));
     }
 

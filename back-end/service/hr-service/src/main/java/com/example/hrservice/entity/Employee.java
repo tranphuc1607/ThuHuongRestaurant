@@ -49,6 +49,10 @@ public class Employee extends BaseEntity {
     @Column(name = "target_days")
     private Integer targetDays;
 
+    // Liên kết với User trong user-service (nullable — nhân viên tạo trực tiếp không có userId)
+    @Column(name = "user_id", unique = true)
+    private Long userId;
+
     @Builder.Default
     private boolean active = true;
 }

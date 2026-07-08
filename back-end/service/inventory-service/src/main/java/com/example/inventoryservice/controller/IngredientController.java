@@ -24,29 +24,16 @@ public class IngredientController {
 
     private final IngredientService ingredientService;
 
+    // Filter kết hợp tùy ý: category + managementType + keyword
     @GetMapping
     @PreAuthorize("hasAuthority('ROLE_EMPLOYEE') or hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<Page<IngredientResponse>> getAll(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) IngredientCategory category,
-            @RequestParam(required = false) ManagementType managementType) {
-        if (category != null) {
-            return ResponseEntity.ok(ingredientService.getByCategory(category, page, size));
-        }
-        if (managementType != null) {
-            return ResponseEntity.ok(ingredientService.getByManagementType(managementType, page, size));
-        }
-        return ResponseEntity.ok(ingredientService.getAllIngredients(page, size));
-    }
-
-    @GetMapping("/search")
-    @PreAuthorize("hasAuthority('ROLE_EMPLOYEE') or hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<Page<IngredientResponse>> search(
-            @RequestParam String keyword,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        return ResponseEntity.ok(ingredientService.search(keyword, page, size));
+            @RequestParam(required = false) ManagementType managementType,
+            @RequestParam(required = false) String keyword) {
+        return ResponseEntity.ok(ingredientService.getFiltered(category, managementType, keyword, page, size));
     }
 
     @GetMapping("/low-stock")
@@ -80,5 +67,12 @@ public class IngredientController {
     public ResponseEntity<Map<String, String>> deactivate(@PathVariable Long id) throws MessageException {
         ingredientService.deactivate(id);
         return ResponseEntity.ok(Map.of("message", "Đã ngừng sử dụng nguyên liệu"));
+    }
+
+    @PatchMapping("/{id}/activate")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<Map<String, String>> activate(@PathVariable Long id) throws MessageException {
+        ingredientService.activate(id);
+        return ResponseEntity.ok(Map.of("message", "Đã kích hoạt lại nguyên liệu"));
     }
 }

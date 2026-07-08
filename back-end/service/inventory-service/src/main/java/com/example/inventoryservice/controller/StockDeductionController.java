@@ -48,7 +48,8 @@ public class StockDeductionController {
     public ResponseEntity<List<StockDeductionResponse>> deductForOrder(
             @RequestBody @Valid OrderDeductionRequest req,
             @AuthenticationPrincipal Jwt jwt) throws MessageException {
-        return ResponseEntity.ok(stockDeductionService.deductForOrder(req, jwt.getSubject()));
+        String performer = (jwt != null) ? jwt.getSubject() : "order-service";
+        return ResponseEntity.ok(stockDeductionService.deductForOrder(req, performer));
     }
 
     @PostMapping("/stock-check")
@@ -63,7 +64,15 @@ public class StockDeductionController {
     public ResponseEntity<List<StockDeductionResponse>> restoreForBooking(
             @RequestBody @Valid OrderDeductionRequest req,
             @AuthenticationPrincipal Jwt jwt) throws MessageException {
-        return ResponseEntity.ok(stockDeductionService.restoreForBooking(req, jwt.getSubject()));
+        String performer = (jwt != null) ? jwt.getSubject() : "order-service";
+        return ResponseEntity.ok(stockDeductionService.restoreForBooking(req, performer));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<Void> deleteDeduction(@PathVariable Long id) throws MessageException {
+        stockDeductionService.deleteDeduction(id);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping

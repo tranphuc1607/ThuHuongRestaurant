@@ -25,8 +25,9 @@ public class InventoryDeductionHelper {
     // Nếu 1 item fail → chỉ rollback item đó, không ảnh hưởng items đã deduct trước
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void deductSingleItem(Long itemId) {
-        // Re-fetch với pessimistic lock để ngăn race condition với removeItem/cancelOrder
-        OrderItem item = orderItemRepository.findById(itemId).orElse(null);
+        // Pessimistic lock trên từng item — ngăn race condition với removeItem/cancelOrder
+        // Dùng findByIdForUpdate thay vì findById để tránh deadlock với outer scheduler
+        OrderItem item = orderItemRepository.findByIdForUpdate(itemId).orElse(null);
         if (item == null) {
             log.warn("[Scheduler] OrderItem id={} không còn tồn tại, bỏ qua", itemId);
             return;

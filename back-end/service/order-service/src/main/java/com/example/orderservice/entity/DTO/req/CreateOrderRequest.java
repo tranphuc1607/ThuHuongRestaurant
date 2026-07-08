@@ -10,4 +10,6 @@ public class CreateOrderRequest {
     private Long tableId;
 
     private String note;
+
+    private Integer guestCount;
 }

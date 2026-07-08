@@ -1,26 +1,87 @@
 @import "tailwindcss";
 
+@theme {
+  /* Brand — coral palette (Claude.com design system) */
+  --color-primary: #cc785c;
+  --color-primary-dark: #a9583e;
+  --color-primary-disabled: #e6dfd8;
+
+  /* Canvas & Surfaces */
+  --color-canvas: #faf9f5;
+  --color-cream: #faf9f5;
+  --color-surface-card: #efe9de;
+  --color-surface-soft: #f5f0e8;
+  --color-surface-dark: #181715;
+  --color-surface-dark-elevated: #252320;
+
+  /* Text */
+  --color-ink: #141413;
+  --color-muted: #6c6a64;
+  --color-muted-soft: #8e8b82;
+  --color-on-dark: #faf9f5;
+  --color-on-dark-soft: #a09d96;
+
+  /* Hairlines */
+  --color-hairline: #e6dfd8;
+
+  /* Status */
+  --color-success: #5db872;
+  --color-warning: #d4a017;
+  --color-error: #c64545;
+
+  /* Kept */
+  --color-sale: #E85D04;
+  --color-accent-teal: #5db8a6;
+  --color-accent-amber: #e8a55a;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #faf9f5;
+  --foreground: #141413;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  /* Removes grey tap flash on iOS/Android; our :active states provide feedback */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Mobile tap reliability — matches DevTools simulation on real phones */
+
+button,
+a,
+[role="button"],
+input,
+select,
+textarea {
+  /* Eliminates 300ms tap delay on mobile browsers */
+  touch-action: manipulation;
+  /* iOS Safari requires cursor:pointer to treat element as tappable */
+  cursor: pointer;
+}
+
+button,
+[role="button"] {
+  /* Prevents long-press text-selection interfering with tap */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Prevent iOS Safari auto-zoom on input focus (triggers when font-size < 16px) */
+@media (max-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
 }

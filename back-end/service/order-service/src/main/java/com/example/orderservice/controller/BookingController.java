@@ -1,6 +1,9 @@
 package com.example.orderservice.controller;
 
 import com.example.orderservice.entity.DTO.req.CreateBookingRequest;
+import com.example.orderservice.entity.DTO.req.SwitchPaymentRequest;
+import com.example.orderservice.entity.DTO.req.UpdateBookingItemsRequest;
+import com.example.orderservice.entity.DTO.req.UpdateItemQtyRequest;
 import com.example.orderservice.entity.DTO.res.BookingResponse;
 import com.example.orderservice.entity.DTO.res.BookingStatsResponse;
 import com.example.orderservice.entity.DTO.res.OrderResponse;
@@ -10,11 +13,14 @@ import com.example.restaurant_common.util.exception.MessageException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
 
 import java.time.Instant;
 import java.util.Map;
@@ -28,8 +34,19 @@ public class BookingController {
 
     @PostMapping
     public ResponseEntity<BookingResponse> createBooking(
-            @RequestBody @Valid CreateBookingRequest req) throws MessageException {
-        return ResponseEntity.ok(bookingService.createBooking(req));
+            @RequestBody @Valid CreateBookingRequest req,
+            @AuthenticationPrincipal Jwt jwt) throws MessageException {
+        String ownerUsername = jwt != null ? jwt.getSubject() : null;
+        return ResponseEntity.ok(bookingService.createBooking(req, ownerUsername));
+    }
+
+    @GetMapping("/my")
+    public ResponseEntity<Page<BookingResponse>> getMyBookings(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal Jwt jwt) {
+        if (jwt == null) return ResponseEntity.ok(Page.empty());
+        return ResponseEntity.ok(bookingService.getMyBookings(jwt.getSubject(), page, size));
     }
 
     @GetMapping("/history")
@@ -46,14 +63,15 @@ public class BookingController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    @PreAuthorize("hasAuthority('ROLE_EMPLOYEE') or hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<Page<BookingResponse>> getAll(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) BookingStatus status,
             @RequestParam(required = false) Instant from,
-            @RequestParam(required = false) Instant to) {
-        return ResponseEntity.ok(bookingService.getAll(page, size, status, from, to));
+            @RequestParam(required = false) Instant to,
+            @RequestParam(defaultValue = "false") boolean excludePending) {
+        return ResponseEntity.ok(bookingService.getAll(page, size, status, from, to, excludePending));
     }
 
     @PatchMapping("/{id}/confirm")
@@ -82,9 +100,9 @@ public class BookingController {
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<BookingResponse> cancelBooking(
             @PathVariable Long id,
-            @RequestBody Map<String, String> body,
+            @RequestBody(required = false) Map<String, String> body,
             @AuthenticationPrincipal Jwt jwt) throws MessageException {
-        String reason = body.getOrDefault("cancelReason", "");
+        String reason = body != null ? body.getOrDefault("cancelReason", "") : "";
         return ResponseEntity.ok(bookingService.cancelBooking(id, jwt.getSubject(), reason));
     }
 
@@ -103,14 +121,47 @@ public class BookingController {
 
     @GetMapping("/stats")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<BookingStatsResponse> getStats() {
-        return ResponseEntity.ok(bookingService.getStats());
+    public ResponseEntity<BookingStatsResponse> getStats(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        return ResponseEntity.ok(bookingService.getStats(date));
     }
 
     @PostMapping("/confirm-by-code/{bookingCode}")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<?> confirmBookingByCode(@PathVariable String bookingCode) throws MessageException {
         bookingService.confirmBookingByCode(bookingCode);
         return ResponseEntity.ok(Map.of("message", "Booking đã được xác nhận"));
+    }
+
+    @DeleteMapping("/{id}/items/{itemId}")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<BookingResponse> removeBookingItem(
+            @PathVariable Long id,
+            @PathVariable Long itemId) throws MessageException {
+        return ResponseEntity.ok(bookingService.removeBookingItem(id, itemId));
+    }
+
+    @PatchMapping("/{id}/items/{itemId}")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<BookingResponse> updateBookingItemQty(
+            @PathVariable Long id,
+            @PathVariable Long itemId,
+            @RequestBody @Valid UpdateItemQtyRequest req) throws MessageException {
+        return ResponseEntity.ok(bookingService.updateBookingItemQty(id, itemId, req.getQuantity()));
+    }
+
+    @PutMapping("/by-code/{bookingCode}/items")
+    public ResponseEntity<BookingResponse> updateItems(
+            @PathVariable String bookingCode,
+            @RequestBody @Valid UpdateBookingItemsRequest req) throws MessageException {
+        return ResponseEntity.ok(bookingService.updateItems(bookingCode, req.getItems()));
+    }
+
+    @PatchMapping("/switch-payment/{bookingCode}")
+    public ResponseEntity<BookingResponse> switchPaymentMethod(
+            @PathVariable String bookingCode,
+            @RequestBody @Valid SwitchPaymentRequest req) throws MessageException {
+        return ResponseEntity.ok(bookingService.switchPaymentMethod(bookingCode, req));
     }
 
     @PatchMapping("/cancel/{bookingCode}")

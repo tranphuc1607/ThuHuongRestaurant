@@ -76,6 +76,19 @@ public class InventoryImportService {
         return InventoryImportResponse.from(importRepository.save(record));
     }
 
+    @Transactional
+    public void deleteImport(Long id) throws MessageException {
+        InventoryImport record = importRepository.findById(id)
+                .orElseThrow(() -> new MessageException("Không tìm thấy phiếu nhập kho với id: " + id));
+
+        Ingredient ingredient = record.getIngredient();
+        double newQty = ingredient.getCurrentQty() - record.getQuantityImported();
+        ingredient.setCurrentQty(Math.max(0, newQty)); // tránh âm do nhập nhầm rồi đã xuất
+        ingredientRepository.save(ingredient);
+
+        importRepository.delete(record);
+    }
+
     @Transactional(readOnly = true)
     public Page<InventoryImportResponse> getAll(int page, int size, Long ingredientId, Instant from, Instant to) throws MessageException {
         PageRequest pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());

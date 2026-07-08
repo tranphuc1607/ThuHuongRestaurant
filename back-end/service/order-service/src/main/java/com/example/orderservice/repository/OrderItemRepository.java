@@ -17,11 +17,16 @@ import java.util.List;
 @Repository
 public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    // Đọc danh sách pending — KHÔNG lock, outer scheduler không giữ tx
     @Query("SELECT i FROM OrderItem i JOIN FETCH i.order o WHERE i.inventoryDeducted = false " +
            "AND i.deductScheduledAt IS NOT NULL AND i.deductScheduledAt <= :now " +
            "AND o.status = :status")
-    List<OrderItem> findPendingDeductionsForUpdate(@Param("now") Instant now, @Param("status") OrderStatus status);
+    List<OrderItem> findPendingDeductions(@Param("now") Instant now, @Param("status") OrderStatus status);
+
+    // Lock từng item riêng lẻ bên trong REQUIRES_NEW transaction của helper
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT i FROM OrderItem i WHERE i.id = :id")
+    java.util.Optional<OrderItem> findByIdForUpdate(@Param("id") Long id);
 
     @Query("SELECT i.productName, SUM(i.quantity) FROM OrderItem i JOIN i.order o " +
            "WHERE o.createdAt BETWEEN :from AND :to AND o.status != 'CANCELLED' " +

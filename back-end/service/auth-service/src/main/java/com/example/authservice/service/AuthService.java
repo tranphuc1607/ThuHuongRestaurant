@@ -33,24 +33,20 @@ public class AuthService {
     private long accessTokenExpiration ;
 
     @Transactional
-public Auth register(RegisterRequest registerDto) throws MessageException {
-    if (authRepository.existsByUsername(registerDto.getUsername())) {
-        throw new MessageException("Tên đăng nhập này đã có người sử dụng!");
+    public Map<String, Object> register(RegisterRequest registerDto) throws MessageException {
+        if (authRepository.existsByUsername(registerDto.getUsername())) {
+            throw new MessageException("Tên đăng nhập này đã có người sử dụng!");
+        }
+        Auth auth = new Auth();
+        auth.setUsername(registerDto.getUsername());
+        auth.setPassword(passwordEncoder.encode(registerDto.getPassword()));
+        auth.setRole("ROLE_USER");
+        auth.setEnabled(true);
+        auth.setLocked(false);
+
+        Auth savedAuth = authRepository.save(auth);
+        return Map.of("id", savedAuth.getId(), "username", savedAuth.getUsername(), "role", savedAuth.getRole());
     }
-    Auth auth = new Auth();
-    auth.setUsername(registerDto.getUsername());
-    auth.setPassword(passwordEncoder.encode(registerDto.getPassword()));
-    auth.setRole("ROLE_USER"); 
-    auth.setEnabled(true);
-    auth.setLocked(false);
-
-
-    Auth savedAuth = authRepository.save(auth);
-
-
-    
-    return savedAuth;
-}
 
     @Transactional
 public ResponseEntity<LoginResponse> login(LoginRequest loginDto) throws MessageException {

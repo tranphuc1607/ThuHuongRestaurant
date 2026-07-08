@@ -6,7 +6,7 @@ import lombok.Data;
 public class IngredientDto {
     private Long id;
     private String name;
-    private String unit;
-    private Double stockQuantity;
-    private Double minStock;
+    private String baseUnit;    // khớp với IngredientResponse.baseUnit
+    private Double currentQty;  // khớp với IngredientResponse.currentQty
+    private Double minThreshold; // khớp với IngredientResponse.minThreshold
 }

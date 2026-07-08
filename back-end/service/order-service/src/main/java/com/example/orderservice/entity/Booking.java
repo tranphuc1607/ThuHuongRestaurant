@@ -68,6 +68,12 @@ public class Booking extends BaseEntity {
     @Builder.Default
     private Double totalAmount = 0.0;
 
+    // Số tiền thực sự đã nhận khi xác nhận (BANK_TRANSFER = totalAmount lúc confirm, CASH = 0)
+    // Không thay đổi khi admin xóa/giảm món sau khi confirm → dùng để tính hoàn tiền
+    @Column(name = "paid_amount")
+    @Builder.Default
+    private Double paidAmount = 0.0;
+
     @Version
     private Long version;
 
@@ -90,8 +96,15 @@ public class Booking extends BaseEntity {
     @Builder.Default
     private boolean reminderSent = false;
 
+    @Column(name = "guest_count")
+    private Integer guestCount;
+
     // null = chưa xác nhận; BANK_TRANSFER = chuyển khoản; CASH = tiền mặt khi đến ăn
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_method", length = 20)
     private BookingPaymentMethod paymentMethod;
+
+    // null = khách vãng lai; có giá trị = user đã đăng nhập khi đặt bàn
+    @Column(name = "owner_username", length = 100)
+    private String ownerUsername;
 }

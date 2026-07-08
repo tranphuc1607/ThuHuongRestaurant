@@ -21,4 +21,7 @@ public interface OrderServiceClient {
 
     @PostMapping("/api/v1/bookings/confirm-by-code/{bookingCode}")
     Map<String, Object> confirmBookingByCode(@PathVariable String bookingCode);
+
+    @GetMapping("/api/v1/orders/table/{qrToken}")
+    Map<String, Object> getOrderByQrToken(@PathVariable String qrToken);
 }

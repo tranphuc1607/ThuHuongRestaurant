@@ -15,6 +15,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/v1/products")
 @RequiredArgsConstructor
@@ -22,33 +24,20 @@ public class ProductController {
 
     private final ProductService productService;
 
+    // Hỗ trợ filter tùy ý: category, status, keyword — có thể kết hợp cùng lúc
     @GetMapping
     public ResponseEntity<Page<ProductResponse>> getAll(
             @RequestParam(required = false) ProductCategory category,
             @RequestParam(required = false) ProductStatus status,
+            @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-
-        if (category != null) {
-            return ResponseEntity.ok(productService.getProductsByCategory(category, page, size));
-        }
-        if (status != null) {
-            return ResponseEntity.ok(productService.getProductsByStatus(status, page, size));
-        }
-        return ResponseEntity.ok(productService.getAllProducts(page, size));
+        return ResponseEntity.ok(productService.getFiltered(category, status, keyword, page, size));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<ProductResponse> getById(@PathVariable Long id) throws MessageException {
         return ResponseEntity.ok(productService.getProductById(id));
-    }
-
-    @GetMapping("/search")
-    public ResponseEntity<Page<ProductResponse>> search(
-            @RequestParam String keyword,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        return ResponseEntity.ok(productService.searchProducts(keyword, page, size));
     }
 
     @PostMapping
@@ -75,8 +64,8 @@ public class ProductController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<Void> delete(@PathVariable Long id) throws MessageException {
+    public ResponseEntity<Map<String, String>> delete(@PathVariable Long id) throws MessageException {
         productService.deleteProduct(id);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok(Map.of("message", "Đã xóa sản phẩm"));
     }
 }

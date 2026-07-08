@@ -13,6 +13,7 @@ import java.time.Instant;
 public class EmployeeResponse {
 
     private Long id;
+    private Long userId;
     private Long telegramId;
     private String name;
     private String phone;
@@ -26,6 +27,7 @@ public class EmployeeResponse {
     public static EmployeeResponse from(Employee e) {
         return EmployeeResponse.builder()
                 .id(e.getId())
+                .userId(e.getUserId())
                 .telegramId(e.getTelegramId())
                 .name(e.getName())
                 .phone(e.getPhone())

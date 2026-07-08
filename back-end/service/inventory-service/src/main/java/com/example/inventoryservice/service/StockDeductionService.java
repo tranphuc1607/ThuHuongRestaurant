@@ -108,18 +108,19 @@ public class StockDeductionService {
                 if (ingredient.getManagementType() == ManagementType.AUTO) {
                     var conversion = unitConversionRepository
                             .findByIngredientAndSaleUnit(ingredient, item.getSaleUnit())
-                            .orElseThrow(() -> new MessageException(String.format(
-                                    "Không có quy đổi đơn vị %s cho nguyên liệu '%s'",
-                                    item.getSaleUnit(), ingredient.getName())));
-                    deductQty = item.getQuantity() * conversion.getBaseQtyPerSaleUnit();
+                            .orElse(null);
+                    // Nếu không có UnitConversion cho đơn vị phục vụ → fallback sang recipe.amountRequired
+                    deductQty = (conversion != null)
+                            ? item.getQuantity() * conversion.getBaseQtyPerSaleUnit()
+                            : recipe.getAmountRequired() * item.getQuantity();
                 } else {
                     deductQty = recipe.getAmountRequired() * item.getQuantity();
                 }
 
                 if (ingredient.getCurrentQty() < deductQty) {
                     throw new MessageException(String.format(
-                            "Không đủ '%s': cần %.4f, còn %.4f",
-                            ingredient.getName(), deductQty, ingredient.getCurrentQty()));
+                            "Nguyên liệu '%s' đã hết, không thể thêm món",
+                            ingredient.getName()));
                 }
 
                 ingredient.setCurrentQty(ingredient.getCurrentQty() - deductQty);
@@ -193,8 +194,10 @@ public class StockDeductionService {
                     var conversion = unitConversionRepository
                             .findByIngredientAndSaleUnit(ingredient, item.getSaleUnit())
                             .orElse(null);
-                    if (conversion == null) continue;
-                    restoreQty = item.getQuantity() * conversion.getBaseQtyPerSaleUnit();
+                    // Đồng bộ với deductForOrder: nếu không có conversion → fallback sang recipe.amountRequired
+                    restoreQty = (conversion != null)
+                            ? item.getQuantity() * conversion.getBaseQtyPerSaleUnit()
+                            : recipe.getAmountRequired() * item.getQuantity();
                 } else {
                     restoreQty = recipe.getAmountRequired() * item.getQuantity();
                 }
@@ -214,6 +217,23 @@ public class StockDeductionService {
 
         return deductionRepository.saveAll(restorations)
                 .stream().map(StockDeductionResponse::from).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void deleteDeduction(Long id) throws MessageException {
+        StockDeduction deduction = deductionRepository.findById(id)
+                .orElseThrow(() -> new MessageException("Không tìm thấy phiếu xuất kho với id: " + id));
+
+        Ingredient ingredient = deduction.getIngredient();
+        // Hoàn kho: cộng lại qty đã xuất (BOOKING_RESTORE là entry âm nên trừ đi)
+        if (deduction.getReason() == DeductionReason.BOOKING_RESTORE) {
+            ingredient.setCurrentQty(ingredient.getCurrentQty() - deduction.getQtyDeducted());
+        } else {
+            ingredient.setCurrentQty(ingredient.getCurrentQty() + deduction.getQtyDeducted());
+        }
+        ingredientRepository.save(ingredient);
+
+        deductionRepository.delete(deduction);
     }
 
     @Transactional(readOnly = true)

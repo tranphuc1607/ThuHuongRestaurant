@@ -1,12 +1,14 @@
 package com.example.orderservice.entity.DTO.req;
 
+import com.example.orderservice.entity.enums.BookingPaymentMethod;
+import com.fasterxml.jackson.annotation.JsonAlias;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 @Data
@@ -15,6 +17,7 @@ public class CreateBookingRequest {
     @NotBlank(message = "Vui lòng nhập họ tên")
     private String customerName;
 
+    @JsonAlias("phone")
     @NotBlank(message = "Vui lòng nhập số điện thoại")
     private String customerPhone;
 
@@ -25,9 +28,14 @@ public class CreateBookingRequest {
     @NotNull(message = "Vui lòng chọn giờ đến")
     private Instant scheduledTime;
 
-    @NotEmpty(message = "Vui lòng chọn ít nhất 1 món")
     @Valid
-    private List<CreateBookingItemRequest> items;
+    private List<CreateBookingItemRequest> items = new ArrayList<>();
 
+    @JsonAlias("notes")
     private String note;
+
+    private Integer guestCount;
+
+    @NotNull(message = "Vui lòng chọn phương thức thanh toán")
+    private BookingPaymentMethod paymentMethod;
 }
