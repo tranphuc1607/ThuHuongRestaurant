@@ -34,94 +34,94 @@ jobs:
     - name: Build tất cả services với Maven
       run: cd back-end && mvn clean package -DskipTests
 
-    - uses: docker/setup-buildx-action@v3
+    - uses: docker/setup-buildx-action@v4
 
     - name: Login GHCR
-      uses: docker/login-action@v3
+      uses: docker/login-action@v4
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Build discovery-server
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: ./back-end/discovery-server
         push: true
         tags: ghcr.io/tranphuc1607/thuhuong-discovery-server:latest
 
     - name: Build config-server
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: ./back-end/config-server
         push: true
         tags: ghcr.io/tranphuc1607/thuhuong-config-server:latest
 
     - name: Build api-gateway
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: ./back-end/api-gateway
         push: true
         tags: ghcr.io/tranphuc1607/thuhuong-api-gateway:latest
 
     - name: Build auth-service
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: ./back-end/service/auth-service
         push: true
         tags: ghcr.io/tranphuc1607/thuhuong-auth-service:latest
 
     - name: Build user-service
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: ./back-end/service/user-service
         push: true
         tags: ghcr.io/tranphuc1607/thuhuong-user-service:latest
 
     - name: Build product-service
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: ./back-end/service/product-service
         push: true
         tags: ghcr.io/tranphuc1607/thuhuong-product-service:latest
 
     - name: Build inventory-service
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: ./back-end/service/inventory-service
         push: true
         tags: ghcr.io/tranphuc1607/thuhuong-inventory-service:latest
 
     - name: Build order-service
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: ./back-end/service/order-service
         push: true
         tags: ghcr.io/tranphuc1607/thuhuong-order-service:latest
 
     - name: Build payment-service
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: ./back-end/service/payment-service
         push: true
         tags: ghcr.io/tranphuc1607/thuhuong-payment-service:latest
 
     - name: Build hr-service
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: ./back-end/service/hr-service
         push: true
         tags: ghcr.io/tranphuc1607/thuhuong-hr-service:latest
 
     - name: Build dashboard-service
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: ./back-end/service/dashboard-service
         push: true
         tags: ghcr.io/tranphuc1607/thuhuong-dashboard-service:latest
 
     - name: Build frontend
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: ./front-end
         push: true
