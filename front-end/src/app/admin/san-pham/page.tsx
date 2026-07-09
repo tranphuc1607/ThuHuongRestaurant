@@ -258,7 +258,15 @@ export default function AdminProductsPage() {
                   {/* Ảnh bên trái */}
                   <div className="w-16 h-16 flex-shrink-0 rounded-xl overflow-hidden bg-surface-card">
                     {p.imageUrl ? (
-                      <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+                      <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover"
+                        onError={e => {
+                          const el = e.currentTarget;
+                          el.style.display = "none";
+                          const parent = el.parentElement;
+                          if (parent) {
+                            parent.innerHTML = `<div class="w-full h-full flex items-center justify-center text-2xl">${catMeta?.icon ?? "🍜"}</div>`;
+                          }
+                        }} />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-2xl">
                         {catMeta?.icon ?? "🍜"}
@@ -345,7 +353,12 @@ export default function AdminProductsPage() {
                 <tr key={p.id} className="hover:bg-surface-soft">
                   <td className="px-4 py-2.5">
                     {p.imageUrl ? (
-                      <img src={p.imageUrl} alt={p.name} className="w-12 h-10 object-cover rounded-lg" />
+                      <img src={p.imageUrl} alt={p.name} className="w-12 h-10 object-cover rounded-lg"
+                        onError={e => {
+                          const el = e.currentTarget;
+                          const icon = CATEGORIES.find(c => c.value === p.category)?.icon ?? "🍜";
+                          el.outerHTML = `<div class="w-12 h-10 bg-canvas rounded-lg flex items-center justify-center text-xl">${icon}</div>`;
+                        }} />
                     ) : (
                       <div className="w-12 h-10 bg-canvas rounded-lg flex items-center justify-center text-xl">
                         {CATEGORIES.find(c => c.value === p.category)?.icon ?? "🍜"}
