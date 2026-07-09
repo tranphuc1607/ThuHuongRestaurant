@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { LogoMark } from "@/components/layout/Logo";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useState, useEffect, useRef } from "react";
@@ -184,10 +185,7 @@ export default function AdminSidebar() {
       <div className="px-5 pt-5 pb-4 border-b border-white/10">
         <div className="flex items-center justify-between mb-4">
           <Link href="/admin/dashboard" className="flex items-center gap-2.5">
-            <div className="border border-primary px-2 py-0.5 text-sm font-black leading-tight">
-              <span className="text-white">THU</span>
-              <span className="text-primary">HƯƠNG</span>
-            </div>
+            <LogoMark onDark size="sm" />
             <span className="text-[10px] text-on-dark-soft font-semibold uppercase tracking-widest">Admin</span>
           </Link>
           <button
@@ -296,10 +294,7 @@ export default function AdminSidebar() {
 
         {/* Logo */}
         <Link href="/admin/dashboard" className="flex items-center gap-2 flex-1 min-w-0">
-          <div className="border border-primary px-2 py-0.5 text-sm font-black leading-tight flex-shrink-0">
-            <span className="text-white">THU</span>
-            <span className="text-primary">HƯƠNG</span>
-          </div>
+          <LogoMark onDark size="sm" />
           <span className="text-[10px] text-on-dark-soft font-semibold uppercase tracking-widest truncate">Admin</span>
         </Link>
 

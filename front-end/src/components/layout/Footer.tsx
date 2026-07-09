@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Logo from "./Logo";
 
 const navLinks = [
   { href: "/", label: "Trang chủ" },
@@ -29,12 +30,7 @@ export default function Footer() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
           {/* Brand */}
           <div className="col-span-2 md:col-span-1">
-            <Link href="/">
-              <div className="border-2 border-primary px-3 py-1 inline-flex items-baseline mb-4">
-                <span className="text-xl font-black text-on-dark tracking-tight">THU</span>
-                <span className="text-xl font-black text-primary tracking-tight">HƯƠNG</span>
-              </div>
-            </Link>
+            <Logo onDark className="mb-4" />
             <p className="text-xs text-on-dark-soft leading-relaxed mb-4">
               Nơi hội tụ tinh hoa ẩm thực Việt Nam với hơn 50 món đặc sắc từ ba miền. Phục vụ từ 08:00 – 22:00 mỗi ngày.
             </p>

@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { LogoMark } from "@/components/layout/Logo";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -59,10 +60,7 @@ export default function EmployeeSidebar() {
       <aside className="hidden md:flex w-56 min-h-screen bg-surface-dark text-on-dark flex-col flex-shrink-0">
         <div className="px-5 pt-5 pb-4 border-b border-white/10">
           <Link href="/employee/ban" className="flex items-center gap-2.5 mb-4">
-            <div className="border border-primary px-2 py-0.5 text-sm font-black leading-tight">
-              <span className="text-white">THU</span>
-              <span className="text-primary">HƯƠNG</span>
-            </div>
+            <LogoMark onDark size="sm" />
             <span className="text-[10px] text-on-dark-soft font-semibold uppercase tracking-widest">NV</span>
           </Link>
           <div className="flex items-center gap-3 px-1">

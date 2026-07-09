@@ -2,6 +2,7 @@
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import Logo from "@/components/layout/Logo";
 import { useAuth } from "@/contexts/AuthContext";
 import { extractApiError } from "@/lib/utils";
 
@@ -75,12 +76,9 @@ function LoginForm() {
     <div className="w-full max-w-sm">
       {/* Logo */}
       <div className="text-center mb-8">
-        <Link href="/">
-          <div className="border-2 border-primary px-4 py-1.5 inline-flex items-baseline mb-4">
-            <span className="text-2xl font-black text-ink">THU</span>
-            <span className="text-2xl font-black text-primary">HƯƠNG</span>
-          </div>
-        </Link>
+        <div className="flex justify-center mb-4">
+          <Logo size="lg" />
+        </div>
         <h1 className="text-xl font-bold text-ink" style={{ fontFamily: "Georgia, serif" }}>
           Đăng nhập
         </h1>
