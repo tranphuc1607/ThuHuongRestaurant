@@ -126,6 +126,8 @@ jobs:
         context: ./front-end
         push: true
         tags: ghcr.io/tranphuc1607/thuhuong-frontend:latest
+        build-args: |
+          NEXT_PUBLIC_API_URL=http://103.82.22.19/api/v1
 
     - name: Copy docker-compose lên VPS
       uses: appleboy/scp-action@v0.1.7
