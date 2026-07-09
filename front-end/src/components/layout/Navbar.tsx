@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import AccountDropdown from "./AccountDropdown";
 import { useAuth } from "@/contexts/AuthContext";
+import Logo from "./Logo";
 
 const baseNavLinks = [
   { href: "/", label: "Trang chủ" },
@@ -40,12 +41,7 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-16">
 
           {/* Logo */}
-          <Link href="/" className="flex-shrink-0">
-            <div className="border-2 border-primary px-3 py-1.5 inline-flex items-baseline gap-0">
-              <span className="text-lg font-black text-ink tracking-tight leading-none">THU</span>
-              <span className="text-lg font-black text-primary tracking-tight leading-none">HƯƠNG</span>
-            </div>
-          </Link>
+          <Logo showSubtitle />
 
           {/* Desktop Nav — center */}
           <ul className="hidden md:flex items-center gap-1">
