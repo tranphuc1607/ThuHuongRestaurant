@@ -145,6 +145,12 @@ export default async function TableQrPage({ params }: { params: Promise<{ qrToke
       }).catch(function(){});
   }
   setInterval(check,3000);
+  // Ẩn ảnh vỡ để chữ cái đầu hiện ra làm fallback
+  document.addEventListener('DOMContentLoaded',function(){
+    document.querySelectorAll('[data-prod-img="1"]').forEach(function(img){
+      img.onerror=function(){this.style.display='none';};
+    });
+  });
 })();
       `}} />
 
@@ -199,14 +205,15 @@ export default async function TableQrPage({ params }: { params: Promise<{ qrToke
                   <div key={p.id} data-prod-id={p.id} data-prod-name={p.name.toLowerCase()} style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", border: "1px solid #f0f0f0" }}>
                     {/* Ảnh / avatar lớn */}
                     <div style={{ height: 108, background: `linear-gradient(145deg,${color}dd,${color}88)`, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden" }}>
+                      {/* Chữ cái đầu luôn hiện làm nền — ảnh phủ lên khi load được */}
+                      <span data-prod-letter="1" style={{ fontSize: 44, fontWeight: 900, color: "rgba(255,255,255,0.92)", textShadow: "0 3px 10px rgba(0,0,0,0.18)", lineHeight: 1 }}>
+                        {letter}
+                      </span>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       {resolvedUrl && (useFetch
                         ? <img data-local-img="1" data-img-src={resolvedUrl} alt={p.name} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "none" }} />
                         : <img data-prod-img="1" src={resolvedUrl} alt={p.name} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
                       )}
-                      <span data-prod-letter="1" style={{ fontSize: 44, fontWeight: 900, color: "rgba(255,255,255,0.92)", textShadow: "0 3px 10px rgba(0,0,0,0.18)", lineHeight: 1, display: (resolvedUrl && !useFetch) ? "none" : "block" }}>
-                        {letter}
-                      </span>
                     </div>
                     {/* Tên + giá */}
                     <div style={{ padding: "8px 10px 10px" }}>

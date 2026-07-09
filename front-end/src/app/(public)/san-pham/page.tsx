@@ -22,8 +22,9 @@ const CATEGORIES = [
 const PAGE_SIZE = 12;
 
 function resolveImage(imageUrl: string | null, id: number): string {
-  if (!imageUrl) return `https://picsum.photos/seed/product-${id}/400/300`;
-  if (imageUrl.startsWith("/uploads/")) return imageUrl;
+  if (!imageUrl || imageUrl.startsWith("/uploads/")) {
+    return `https://picsum.photos/seed/product-${id}/400/300`;
+  }
   try {
     const { hostname } = new URL(imageUrl);
     if (["restaurant.com", "localhost", "example.com", "placehold.co"].includes(hostname)) {

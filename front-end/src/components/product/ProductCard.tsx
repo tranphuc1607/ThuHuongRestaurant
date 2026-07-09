@@ -4,13 +4,19 @@ import { Product } from "@/lib/types";
 import { formatPrice } from "@/lib/utils";
 import AddDishButton from "@/components/menu/AddDishButton";
 
+const FALLBACK = (id: number) => `https://picsum.photos/seed/product-${id}/400/400`;
+
 export default function ProductCard({ product }: { product: Product }) {
+  const imgSrc = product.imageUrl && !product.imageUrl.startsWith("/uploads/")
+    ? product.imageUrl
+    : FALLBACK(product.id);
+
   return (
     <div className="bg-canvas border border-hairline rounded-xl overflow-hidden flex flex-col group hover:border-primary/50 hover:shadow-md transition-all duration-300">
       {/* Image */}
       <Link href={`/san-pham/${product.id}`} className="block relative aspect-square overflow-hidden bg-surface-soft">
         <Image
-          src={product.imageUrl}
+          src={imgSrc}
           alt={product.name}
           fill
           className="object-cover group-hover:scale-[1.04] transition-transform duration-500"

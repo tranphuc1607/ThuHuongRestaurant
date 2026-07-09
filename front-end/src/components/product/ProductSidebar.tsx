@@ -4,6 +4,10 @@ import { Category, Product } from "@/lib/types";
 import { formatPrice } from "@/lib/utils";
 
 function SidebarProductItem({ product }: { product: Product }) {
+  const imgSrc = product.imageUrl && !product.imageUrl.startsWith("/uploads/")
+    ? product.imageUrl
+    : `https://picsum.photos/seed/product-${product.id}/112/112`;
+
   return (
     <Link
       href={`/san-pham/${product.id}`}
@@ -11,7 +15,7 @@ function SidebarProductItem({ product }: { product: Product }) {
     >
       <div className="relative w-14 h-14 flex-shrink-0 bg-canvas overflow-hidden">
         <Image
-          src={product.imageUrl}
+          src={imgSrc}
           alt={product.name}
           fill
           className="object-cover"
