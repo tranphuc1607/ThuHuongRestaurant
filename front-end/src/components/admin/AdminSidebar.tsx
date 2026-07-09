@@ -182,38 +182,38 @@ export default function AdminSidebar() {
   const navContent = (
     <>
       {/* Logo + close */}
-      <div className="px-5 pt-5 pb-4 border-b border-white/10">
-        <div className="flex items-center justify-between mb-4">
-          <Link href="/admin/dashboard" className="flex items-center gap-2.5">
+      <div className="px-4 pt-4 pb-3 border-b border-white/10">
+        <div className="flex items-center justify-between mb-3">
+          <Link href="/admin/dashboard" className="flex items-center gap-2">
             <LogoMark onDark size="sm" />
             <span className="text-[10px] text-on-dark-soft font-semibold uppercase tracking-widest">Admin</span>
           </Link>
           <button
-            className="lg:hidden w-8 h-8 flex items-center justify-center rounded-lg text-on-dark-soft hover:text-on-dark hover:bg-white/10 transition-colors touch-manipulation"
+            className="lg:hidden w-7 h-7 flex items-center justify-center rounded-lg text-on-dark-soft hover:text-on-dark hover:bg-white/10 transition-colors touch-manipulation"
             onClick={() => setDrawerOpen(false)}
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
             </svg>
           </button>
         </div>
 
-        <div className="flex items-center gap-3 px-1">
-          <div className="w-9 h-9 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center flex-shrink-0">
-            <span className="text-primary text-xs font-bold">{initials}</span>
+        <div className="flex items-center gap-2 px-1">
+          <div className="w-7 h-7 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center flex-shrink-0">
+            <span className="text-primary text-[10px] font-bold">{initials}</span>
           </div>
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-on-dark truncate">{user?.fullName ?? user?.username}</div>
+            <div className="text-xs font-semibold text-on-dark truncate">{user?.fullName ?? user?.username}</div>
             <div className="text-[10px] text-primary font-medium">{user?.role?.replace("ROLE_", "")}</div>
           </div>
         </div>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-5">
+      <nav className="flex-1 min-h-0 overflow-y-auto py-3 px-3 space-y-3">
         {NAV.map((section) => (
           <div key={section.group}>
-            <div className="px-3 mb-1.5 text-[10px] font-semibold text-on-dark-soft uppercase tracking-[1.5px]">
+            <div className="px-3 mb-1 text-[10px] font-semibold text-on-dark-soft uppercase tracking-[1.5px]">
               {section.group}
             </div>
             <div className="space-y-0.5">
@@ -221,7 +221,7 @@ export default function AdminSidebar() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
                     isActive(item.href, item.exact)
                       ? "bg-primary/20 text-primary font-semibold"
                       : "text-on-dark-soft hover:bg-white/7 hover:text-on-dark"
@@ -242,10 +242,10 @@ export default function AdminSidebar() {
       </nav>
 
       {/* Bottom actions */}
-      <div className="border-t border-white/10 p-3 space-y-0.5">
+      <div className="border-t border-white/10 p-2 space-y-0.5">
         <Link
           href="/"
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-on-dark-soft hover:text-on-dark hover:bg-white/7 transition-colors"
+          className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-on-dark-soft hover:text-on-dark hover:bg-white/7 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
@@ -255,7 +255,7 @@ export default function AdminSidebar() {
         </Link>
         <Link
           href="/employee/ban"
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-on-dark-soft hover:text-on-dark hover:bg-white/7 transition-colors"
+          className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-on-dark-soft hover:text-on-dark hover:bg-white/7 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
@@ -265,7 +265,7 @@ export default function AdminSidebar() {
         </Link>
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-red-400 hover:text-red-300 hover:bg-white/7 transition-colors text-left"
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-red-400 hover:text-red-300 hover:bg-white/7 transition-colors text-left"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
