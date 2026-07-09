@@ -256,21 +256,12 @@ export default function AdminProductsPage() {
                 <div key={p.id}
                   className="bg-white rounded-2xl border border-hairline overflow-hidden flex items-center gap-3 p-3">
                   {/* Ảnh bên trái */}
-                  <div className="w-16 h-16 flex-shrink-0 rounded-xl overflow-hidden bg-surface-card">
-                    {p.imageUrl ? (
-                      <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover"
-                        onError={e => {
-                          const el = e.currentTarget;
-                          el.style.display = "none";
-                          const parent = el.parentElement;
-                          if (parent) {
-                            parent.innerHTML = `<div class="w-full h-full flex items-center justify-center text-2xl">${catMeta?.icon ?? "🍜"}</div>`;
-                          }
-                        }} />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-2xl">
-                        {catMeta?.icon ?? "🍜"}
-                      </div>
+                  <div className="w-16 h-16 flex-shrink-0 rounded-xl overflow-hidden bg-surface-card relative flex items-center justify-center text-2xl">
+                    <span>{catMeta?.icon ?? "🍜"}</span>
+                    {p.imageUrl && (
+                      <img src={p.imageUrl} alt={p.name}
+                        className="absolute inset-0 w-full h-full object-cover"
+                        onError={e => { e.currentTarget.style.display = "none"; }} />
                     )}
                   </div>
 
@@ -352,18 +343,14 @@ export default function AdminProductsPage() {
               ) : products.map(p => (
                 <tr key={p.id} className="hover:bg-surface-soft">
                   <td className="px-4 py-2.5">
-                    {p.imageUrl ? (
-                      <img src={p.imageUrl} alt={p.name} className="w-12 h-10 object-cover rounded-lg"
-                        onError={e => {
-                          const el = e.currentTarget;
-                          const icon = CATEGORIES.find(c => c.value === p.category)?.icon ?? "🍜";
-                          el.outerHTML = `<div class="w-12 h-10 bg-canvas rounded-lg flex items-center justify-center text-xl">${icon}</div>`;
-                        }} />
-                    ) : (
-                      <div className="w-12 h-10 bg-canvas rounded-lg flex items-center justify-center text-xl">
-                        {CATEGORIES.find(c => c.value === p.category)?.icon ?? "🍜"}
-                      </div>
-                    )}
+                    <div className="w-12 h-10 bg-canvas rounded-lg relative flex items-center justify-center text-xl overflow-hidden">
+                      <span>{CATEGORIES.find(c => c.value === p.category)?.icon ?? "🍜"}</span>
+                      {p.imageUrl && (
+                        <img src={p.imageUrl} alt={p.name}
+                          className="absolute inset-0 w-full h-full object-cover rounded-lg"
+                          onError={e => { e.currentTarget.style.display = "none"; }} />
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-2.5 font-medium text-ink">{p.name}</td>
                   <td className="px-4 py-2.5 text-muted">
