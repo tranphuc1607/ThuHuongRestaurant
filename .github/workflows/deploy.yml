@@ -133,7 +133,7 @@ jobs:
         host: ${{ secrets.VPS_HOST }}
         username: ${{ secrets.VPS_USERNAME }}
         key: ${{ secrets.VPS_SSH_KEY }}
-        source: "back-end/docker-compose.prod.yml"
+        source: "back-end/docker-compose.prod.yml,back-end/init.sql"
         target: "/home/thuhuong/app"
 
     - name: Deploy lên VPS
