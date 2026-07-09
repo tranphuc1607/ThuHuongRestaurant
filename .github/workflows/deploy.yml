@@ -21,6 +21,16 @@ jobs:
         distribution: 'temurin'
         cache: maven
 
+    - name: Cài restaurant-common vào Maven local repo
+      run: |
+        mvn install:install-file \
+          -Dfile=libs/restaurant-common-0.0.1-SNAPSHOT.jar \
+          -DgroupId=com.example \
+          -DartifactId=restaurant-common \
+          -Dversion=0.0.1-SNAPSHOT \
+          -Dpackaging=jar \
+          -DgeneratePom=true
+
     - name: Build tất cả services với Maven
       run: cd back-end && mvn clean package -DskipTests
 
