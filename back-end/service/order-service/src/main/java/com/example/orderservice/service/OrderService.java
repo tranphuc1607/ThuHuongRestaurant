@@ -36,6 +36,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -68,6 +69,7 @@ public class OrderService {
         order.setCreatedBy(createdBy);
 
         table.setStatus(TableStatus.OCCUPIED);
+        table.setQrToken(UUID.randomUUID().toString());
         tableRepository.save(table);
 
         order = orderRepository.save(order);
@@ -256,6 +258,7 @@ public class OrderService {
         DiningTable table = order.getDiningTable();
         if (table != null) {
             table.setStatus(TableStatus.AVAILABLE);
+            table.setQrToken(UUID.randomUUID().toString());
             tableRepository.save(table);
         }
 
@@ -302,6 +305,7 @@ public class OrderService {
         DiningTable table = order.getDiningTable();
         if (table != null) {
             table.setStatus(TableStatus.AVAILABLE);
+            table.setQrToken(UUID.randomUUID().toString());
             tableRepository.save(table);
         }
 

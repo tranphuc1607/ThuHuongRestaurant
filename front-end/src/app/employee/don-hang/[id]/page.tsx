@@ -398,7 +398,7 @@ export default function EmployeeOrderDetailPage() {
       const json = await res.json();
       if (json.statusCode === 200) {
         showToast("Đã hủy đơn — bàn đã được giải phóng");
-        load();
+        setTimeout(() => router.push(backHref), 1200);
       } else {
         showToast(extractApiError(json, "Hủy đơn thất bại"), false);
       }

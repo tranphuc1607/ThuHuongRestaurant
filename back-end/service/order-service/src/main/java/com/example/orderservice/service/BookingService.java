@@ -47,6 +47,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -498,6 +499,7 @@ public class BookingService {
         // Luôn để OPEN — nhân viên thêm món khách gọi thêm hoặc xử lý hoàn tiền rồi checkout
         if (table != null) {
             table.setStatus(TableStatus.OCCUPIED);
+            table.setQrToken(UUID.randomUUID().toString());
             tableRepository.save(table);
         }
         booking.setStatus(BookingStatus.CHECKED_IN);

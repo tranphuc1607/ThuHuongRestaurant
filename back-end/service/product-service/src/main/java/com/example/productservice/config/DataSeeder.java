@@ -21,7 +21,24 @@ public class DataSeeder implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        if (productRepository.count() > 0) return;
+        // Luôn kiểm tra "Bia Cốc" riêng để hỗ trợ DB đã có sẵn sản phẩm khác
+        if (!productRepository.existsByNameIgnoreCase("Bia Cốc")) {
+            productRepository.save(
+                Product.builder()
+                    .name("Bia Cốc")
+                    .price(15_000.0)
+                    .category(ProductCategory.DRINK)
+                    .description("Bia hơi tươi rót theo cốc, mát lạnh sảng khoái")
+                    .imageUrl("https://images.unsplash.com/photo-1555658636-6e4a36218be7?w=400")
+                    .status(ProductStatus.AVAILABLE)
+                    .saleUnit("CUP")
+                    .isDeleted(false)
+                    .build()
+            );
+            log.info("[Seed] Đã tạo sản phẩm: Bia Cốc");
+        }
+
+        if (productRepository.count() > 1) return;
 
         List<Product> products = List.of(
             // === GÀ ===

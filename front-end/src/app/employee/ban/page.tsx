@@ -127,7 +127,9 @@ export default function TableMapPage() {
       const json = await res.json();
       if (json.statusCode === 200) {
         setCreateModal(null);
-        setQrOverlay({ orderId: json.data.id, tableName: createModal.name, qrToken: createModal.qrToken });
+        // Dùng qrToken từ response (đã rotate lúc mở bàn), không phải token cũ trong UI state
+        const newQrToken = json.data.tableQrToken ?? createModal.qrToken;
+        setQrOverlay({ orderId: json.data.id, tableName: createModal.name, qrToken: newQrToken });
       } else {
         setCreateError(extractApiError(json, "Tạo đơn thất bại"));
       }
@@ -193,6 +195,11 @@ export default function TableMapPage() {
       if (res.ok && json.statusCode === 200) {
         setPanelToast("Đã hủy đơn — bàn đã được giải phóng ✓");
         setTimeout(() => setPanelToast(null), 3000);
+        // Optimistic: cập nhật ngay lập tức, không chờ server reload
+        setTables(prev => prev.map(t =>
+          t.id === selectedTable!.id ? { ...t, status: "AVAILABLE" as const } : t
+        ));
+        setRefundMap(prev => { const m = { ...prev }; delete m[selectedTable!.id]; return m; });
         setCurrentOrder(null);
         setSelectedTable(null);
         load(true);
