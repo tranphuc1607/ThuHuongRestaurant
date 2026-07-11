@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300">
+  <rect width="400" height="300" fill="#f5f0eb"/>
+  <circle cx="200" cy="140" r="65" fill="none" stroke="#d4a574" stroke-width="2.5"/>
+  <circle cx="200" cy="140" r="48" fill="none" stroke="#d4a574" stroke-width="1.5"/>
+  <line x1="155" y1="110" x2="155" y2="170" stroke="#d4a574" stroke-width="3" stroke-linecap="round"/>
+  <line x1="165" y1="110" x2="165" y2="140" stroke="#d4a574" stroke-width="3" stroke-linecap="round"/>
+  <line x1="175" y1="110" x2="175" y2="170" stroke="#d4a574" stroke-width="3" stroke-linecap="round"/>
+  <path d="M225 110 Q245 130 225 170" stroke="#d4a574" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <text x="200" y="232" text-anchor="middle" font-family="system-ui,sans-serif" font-size="13" fill="#b8937a" letter-spacing="1">Chưa có ảnh</text>
+</svg>

@@ -77,54 +77,43 @@ export default function ContactFloat() {
         <div onClick={() => setOpen(false)} className="fixed inset-0 z-[240] bg-black/20" />
       )}
 
-      {/* Container cố định góc phải dưới (mobile) / trái dưới (desktop) */}
       <div className="fixed bottom-6 left-6 z-[250]">
-
-        {/* Sub-actions: absolute phía trên nút toggle, xuất hiện từ dưới lên */}
-        <div
-          className="absolute bottom-[calc(100%+10px)] left-0
-                     flex flex-col gap-2.5 pointer-events-none"
-        >
-          {/* Zalo ở dưới cùng (gần nút), Call ở trên — render ngược để Zalo gần toggle */}
-          {[...ACTIONS].reverse().map((action, i) => {
-            const origIndex = ACTIONS.length - 1 - i;
-            return (
-              <a
-                key={action.key}
-                href={action.href}
-                target={action.target}
-                rel={action.target === "_blank" ? "noreferrer" : undefined}
-                onClick={() => setOpen(false)}
-                style={{
-                  transitionDelay: open
-                    ? `${i * 55}ms`
-                    : `${(ACTIONS.length - 1 - i) * 40}ms`,
-                }}
-                className={[
-                  "flex items-center gap-3 pl-3.5 pr-5 py-3 rounded-2xl",
-                  `bg-gradient-to-br ${action.from}`,
-                  `shadow-lg ${action.shadow}`,
-                  "text-white select-none whitespace-nowrap",
-                  "hover:scale-[1.04] active:scale-[0.97]",
-                  "transition-all duration-300 ease-out",
-                  open
-                    ? "opacity-100 translate-y-0 scale-100 pointer-events-auto"
-                    : "opacity-0 translate-y-5 scale-90 pointer-events-none",
-                ].join(" ")}
-              >
-                <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
-                  {action.icon}
-                </div>
-                <div>
-                  <div className="text-sm font-bold leading-none">{action.label}</div>
-                  <div className="text-[11px] text-white/70 mt-0.5">{action.sub}</div>
-                </div>
-              </a>
-            );
-          })}
+        <div className="absolute bottom-[calc(100%+10px)] left-0 flex flex-col gap-2.5 pointer-events-none">
+          {[...ACTIONS].reverse().map((action, i) => (
+            <a
+              key={action.key}
+              href={action.href}
+              target={action.target}
+              rel={action.target === "_blank" ? "noreferrer" : undefined}
+              onClick={() => setOpen(false)}
+              style={{
+                transitionDelay: open
+                  ? `${i * 55}ms`
+                  : `${(ACTIONS.length - 1 - i) * 40}ms`,
+              }}
+              className={[
+                "flex items-center gap-3 pl-3.5 pr-5 py-3 rounded-2xl",
+                `bg-gradient-to-br ${action.from}`,
+                `shadow-lg ${action.shadow}`,
+                "text-white select-none whitespace-nowrap",
+                "hover:scale-[1.04] active:scale-[0.97]",
+                "transition-all duration-300 ease-out",
+                open
+                  ? "opacity-100 translate-y-0 scale-100 pointer-events-auto"
+                  : "opacity-0 translate-y-5 scale-90 pointer-events-none",
+              ].join(" ")}
+            >
+              <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+                {action.icon}
+              </div>
+              <div>
+                <div className="text-sm font-bold leading-none">{action.label}</div>
+                <div className="text-[11px] text-white/70 mt-0.5">{action.sub}</div>
+              </div>
+            </a>
+          ))}
         </div>
 
-        {/* Nút toggle chính — luôn ở góc dưới */}
         <div className="relative pointer-events-auto">
           <span
             className={`absolute inset-0 rounded-full bg-primary/40 transition-all duration-500 ${
@@ -132,7 +121,6 @@ export default function ContactFloat() {
             }`}
           />
           <span className="absolute inset-[-4px] rounded-full bg-primary/20" />
-
           <button
             onClick={() => setOpen(v => !v)}
             aria-label={open ? "Đóng liên hệ" : "Liên hệ"}
@@ -154,7 +142,6 @@ export default function ContactFloat() {
             </span>
           </button>
 
-          {/* Tooltip — desktop only */}
           <span
             className={`hidden sm:block absolute left-16 top-1/2 -translate-y-1/2 whitespace-nowrap bg-gray-900/90 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-lg transition-all duration-300 pointer-events-none ${
               open ? "opacity-0 translate-x-2" : "opacity-100 translate-x-0"

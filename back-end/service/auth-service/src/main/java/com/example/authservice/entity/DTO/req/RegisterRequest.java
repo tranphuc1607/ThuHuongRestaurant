@@ -13,10 +13,6 @@ public class RegisterRequest {
     private String username;
 
     @NotBlank(message = "Mật khẩu không được để trống")
-    @Size(min = 8, max = 128, message = "Mật khẩu phải từ 8 đến 128 ký tự")
-    @Pattern(
-        regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).+$",
-        message = "Mật khẩu phải có ít nhất 1 chữ hoa, 1 chữ thường và 1 số"
-    )
+    @Size(min = 8, max = 128, message = "Mật khẩu phải từ 8 ký tự trở lên")
     private String password;
 }

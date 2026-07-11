@@ -66,6 +66,10 @@ public class StockDeductionService {
 
     @Transactional
     public StockDeductionResponse adjust(StockAdjustmentRequest req, String deductedBy) throws MessageException {
+        if (req.getAdjustmentQty() == 0.0) {
+            throw new MessageException("Số lượng điều chỉnh phải khác 0");
+        }
+
         Ingredient ingredient = ingredientRepository.findById(req.getIngredientId())
                 .orElseThrow(() -> new MessageException("Không tìm thấy nguyên liệu với id: " + req.getIngredientId()));
 
@@ -157,8 +161,10 @@ public class StockDeductionService {
                     var conversion = unitConversionRepository
                             .findByIngredientAndSaleUnit(ingredient, item.getSaleUnit())
                             .orElse(null);
-                    if (conversion == null) continue;
-                    needed = item.getQuantity() * conversion.getBaseQtyPerSaleUnit();
+                    // Đồng bộ với deductForOrder: fallback sang recipe.amountRequired khi không có conversion
+                    needed = (conversion != null)
+                            ? item.getQuantity() * conversion.getBaseQtyPerSaleUnit()
+                            : recipe.getAmountRequired() * item.getQuantity();
                 } else {
                     needed = recipe.getAmountRequired() * item.getQuantity();
                 }
@@ -225,12 +231,13 @@ public class StockDeductionService {
                 .orElseThrow(() -> new MessageException("Không tìm thấy phiếu xuất kho với id: " + id));
 
         Ingredient ingredient = deduction.getIngredient();
-        // Hoàn kho: cộng lại qty đã xuất (BOOKING_RESTORE là entry âm nên trừ đi)
-        if (deduction.getReason() == DeductionReason.BOOKING_RESTORE) {
-            ingredient.setCurrentQty(ingredient.getCurrentQty() - deduction.getQtyDeducted());
-        } else {
-            ingredient.setCurrentQty(ingredient.getCurrentQty() + deduction.getQtyDeducted());
-        }
+        // Hoàn kho bằng cách cộng lại qtyDeducted (âm với BOOKING_RESTORE/ADJUSTMENT-tăng).
+        // stock += qtyDeducted đúng cho mọi trường hợp:
+        //   ORDER/MANUAL/WASTE : qtyDeducted > 0 → cộng lại lượng đã trừ ✓
+        //   BOOKING_RESTORE    : qtyDeducted < 0 → cộng số âm = trừ đi lượng đã hoàn ✓
+        //   ADJUSTMENT (tăng)  : qtyDeducted < 0 → trừ lại lượng đã tăng ✓
+        //   ADJUSTMENT (giảm)  : qtyDeducted > 0 → cộng lại lượng đã giảm ✓
+        ingredient.setCurrentQty(ingredient.getCurrentQty() + deduction.getQtyDeducted());
         ingredientRepository.save(ingredient);
 
         deductionRepository.delete(deduction);

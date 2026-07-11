@@ -85,10 +85,10 @@ export default function DishCartFloat() {
               dishes.map((d) => (
                 <div key={d.id} className="flex items-center gap-3 border border-hairline p-3 bg-canvas hover:border-primary/30 transition-colors">
                   <img
-                    src={d.imageUrl || `https://picsum.photos/seed/product-${d.id}/80/80`}
+                    src={d.imageUrl || `/images/no-image.svg`}
                     alt={d.name}
                     className="w-12 h-12 object-cover flex-shrink-0 rounded"
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = `https://picsum.photos/seed/product-${d.id}/80/80`; }}
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = `/images/no-image.svg`; }}
                   />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-ink truncate">{d.name}</p>

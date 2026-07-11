@@ -4,9 +4,7 @@ import { Category, Product } from "@/lib/types";
 import { formatPrice } from "@/lib/utils";
 
 function SidebarProductItem({ product }: { product: Product }) {
-  const imgSrc = product.imageUrl && !product.imageUrl.startsWith("/uploads/")
-    ? product.imageUrl
-    : `https://picsum.photos/seed/product-${product.id}/112/112`;
+  const imgSrc = product.imageUrl || "/images/no-image.svg";
 
   return (
     <Link

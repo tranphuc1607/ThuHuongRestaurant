@@ -62,7 +62,8 @@ export default function PhanCaPage() {
   const [clearingAll, setClearingAll] = useState(false);
   const [clearingWeek, setClearingWeek] = useState(false);
 
-  const [selectedShiftId, setSelectedShiftId] = useState("");
+  // Multi-select shifts
+  const [selectedShiftIds, setSelectedShiftIds] = useState<number[]>([]);
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
   const [effectiveFrom, setEffectiveFrom] = useState("");
   const [effectiveTo, setEffectiveTo] = useState("");
@@ -116,10 +117,15 @@ export default function PhanCaPage() {
   function selectEmployee(emp: Employee) {
     setSelectedEmployee(emp);
     setAssignments([]);
-    setSelectedShiftId(""); setSelectedDays([]);
+    setSelectedShiftIds([]); setSelectedDays([]);
     setEffectiveFrom(""); setEffectiveTo(""); setFormError("");
     loadAssignments(emp.id);
     setMobileView("detail");
+  }
+
+  function toggleShift(id: number) {
+    setSelectedShiftIds(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
+    setFormError("");
   }
 
   function toggleDay(dow: string) {
@@ -128,25 +134,34 @@ export default function PhanCaPage() {
 
   async function assignBatch() {
     if (!selectedEmployee) return;
-    if (!selectedShiftId) { setFormError("Vui lòng chọn ca làm"); return; }
+    if (selectedShiftIds.length === 0) { setFormError("Vui lòng chọn ít nhất 1 ca làm"); return; }
     if (selectedDays.length === 0) { setFormError("Vui lòng chọn ít nhất 1 ngày"); return; }
     if (!effectiveFrom) { setFormError("Vui lòng chọn ngày bắt đầu áp dụng"); return; }
     setSaving(true); setFormError("");
     try {
-      const body: Record<string, unknown> = {
-        employeeId: selectedEmployee.id, shiftId: Number(selectedShiftId),
-        daysOfWeek: selectedDays, effectiveFrom,
-      };
-      if (effectiveTo) body.effectiveTo = effectiveTo;
-      const res = await fetch(`${BASE}/hr/shifts/assign`, {
-        method: "POST", headers: getAuthHeaders(), body: JSON.stringify(body),
-      });
-      const json = res ? JSON.parse(await res.text() || "null") : null;
-      if (res.ok && json?.statusCode === 200) {
-        showToast(`Đã thêm: ${selectedDays.map(d => DOW_VI[d]).join(", ")}`);
-        setSelectedDays([]);
+      const results = await Promise.all(
+        selectedShiftIds.map(shiftId => {
+          const body: Record<string, unknown> = {
+            employeeId: selectedEmployee.id, shiftId,
+            daysOfWeek: selectedDays, effectiveFrom,
+          };
+          if (effectiveTo) body.effectiveTo = effectiveTo;
+          return fetch(`${BASE}/hr/shifts/assign`, {
+            method: "POST", headers: getAuthHeaders(), body: JSON.stringify(body),
+          }).then(r => r.text()).then(t => t ? JSON.parse(t) : null);
+        })
+      );
+      const failed = results.find(r => !r || r.statusCode !== 200);
+      if (!failed) {
+        const names = selectedShiftIds
+          .map(id => shifts.find(s => s.id === id)?.name ?? "Ca")
+          .join(" + ");
+        showToast(`Đã thêm: ${names} — ${selectedDays.map(d => DOW_VI[d]).join(", ")}`);
+        setSelectedShiftIds([]);
         await loadAssignments(selectedEmployee.id);
-      } else setFormError(extractApiError(json, "Thêm lịch thất bại"));
+      } else {
+        setFormError(extractApiError(failed, "Thêm lịch thất bại"));
+      }
     } catch { setFormError("Không kết nối được máy chủ"); }
     finally { setSaving(false); }
   }
@@ -221,6 +236,30 @@ export default function PhanCaPage() {
       && date >= a.effectiveFrom && (!a.effectiveTo || date <= a.effectiveTo));
   }
 
+  async function quickAddToDay(dow: string, date: string) {
+    if (!selectedEmployee || selectedShiftIds.length === 0) return;
+    const dayShiftsForDow = getAssignmentsForDate(date);
+    const toAdd = selectedShiftIds.filter(id => !dayShiftsForDow.some(a => a.shiftId === id));
+    if (toAdd.length === 0) return;
+    setSaving(true);
+    try {
+      const results = await Promise.all(toAdd.map(shiftId => {
+        const body: Record<string, unknown> = {
+          employeeId: selectedEmployee.id, shiftId, daysOfWeek: [dow],
+          effectiveFrom: effectiveFrom || date,
+        };
+        if (effectiveTo) body.effectiveTo = effectiveTo;
+        return fetch(`${BASE}/hr/shifts/assign`, { method: "POST", headers: getAuthHeaders(), body: JSON.stringify(body) })
+          .then(r => r.text()).then(t => t ? JSON.parse(t) : null);
+      }));
+      const failed = results.find(r => !r || r.statusCode !== 200);
+      if (!failed) showToast(`Đã thêm ${DOW_VI_FULL[dow]}`);
+      else showToast(extractApiError(failed, "Thất bại"));
+      loadAssignments(selectedEmployee.id);
+    } catch { showToast("Lỗi kết nối"); }
+    finally { setSaving(false); }
+  }
+
   return (
     <div className="p-3 md:p-6">
       {toast && (
@@ -235,7 +274,7 @@ export default function PhanCaPage() {
           <button
             onPointerDown={e => { if (e.pointerType === "touch") { e.preventDefault(); setMobileView("list"); } }}
             onClick={() => setMobileView("list")}
-            className="md:hidden w-9 h-9 flex items-center justify-center rounded-xl bg-surface-card text-muted hover:bg-hairline touch-manipulation"
+            className="w-9 h-9 flex items-center justify-center rounded-xl bg-surface-card text-muted hover:bg-hairline touch-manipulation"
             style={{ WebkitTapHighlightColor: "transparent" }}>←</button>
         ) : (
           <Link href="/admin/nhan-su"
@@ -372,23 +411,38 @@ export default function PhanCaPage() {
             </div>
           )}
 
-          {/* 1. Chọn ca */}
+          {/* 1. Chọn ca — multi-select */}
           <div className="bg-white rounded-2xl border border-hairline p-4 mb-3">
-            <div className="text-xs font-bold text-muted uppercase mb-2">1. Chọn ca làm</div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs font-bold text-muted uppercase">1. Chọn ca làm</div>
+              {selectedShiftIds.length > 0 && (
+                <span className="text-[10px] text-primary font-semibold bg-primary/10 px-2 py-0.5 rounded-full">
+                  {selectedShiftIds.length} ca đã chọn
+                </span>
+              )}
+            </div>
             {activeShifts.length === 0 ? (
               <p className="text-sm text-yellow-600">Chưa có ca nào. <Link href="/admin/nhan-su/ca-lam" className="underline">Tạo ca làm trước</Link></p>
             ) : (
               <div className="flex flex-wrap gap-2">
-                {activeShifts.map(s => (
-                  <button key={s.id}
-                    onPointerDown={e => { if (e.pointerType === "touch") { e.preventDefault(); setSelectedShiftId(String(s.id)); setFormError(""); } }}
-                    onClick={() => { setSelectedShiftId(String(s.id)); setFormError(""); }}
-                    className={`px-3 py-2 rounded-xl border text-xs transition-colors touch-manipulation ${selectedShiftId === String(s.id) ? "border-primary bg-primary/10 text-primary font-bold" : "border-hairline text-ink hover:border-primary"}`}
-                    style={{ WebkitTapHighlightColor: "transparent" }}>
-                    <div className="font-semibold">{s.name}</div>
-                    <div className="text-muted-soft">{s.startTime}–{s.endTime}</div>
-                  </button>
-                ))}
+                {activeShifts.map(s => {
+                  const checked = selectedShiftIds.includes(s.id);
+                  return (
+                    <button key={s.id}
+                      onPointerDown={e => { if (e.pointerType === "touch") { e.preventDefault(); toggleShift(s.id); } }}
+                      onClick={() => toggleShift(s.id)}
+                      className={`px-3 py-2 rounded-xl border text-xs transition-colors touch-manipulation ${checked ? "border-primary bg-primary/10 text-primary font-bold ring-1 ring-primary/30" : "border-hairline text-ink hover:border-primary"}`}
+                      style={{ WebkitTapHighlightColor: "transparent" }}>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${checked ? "bg-primary border-primary" : "border-gray-300"}`}>
+                          {checked && <span className="text-white text-[8px] font-bold leading-none">✓</span>}
+                        </span>
+                        <span className="font-semibold">{s.name}</span>
+                      </div>
+                      <div className="text-muted-soft mt-0.5 pl-5">{s.startTime}–{s.endTime}</div>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -445,7 +499,7 @@ export default function PhanCaPage() {
             onPointerDown={e => { if (e.pointerType === "touch") { e.preventDefault(); if (!saving) assignBatch(); } }}
             className="w-full py-3 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary-dark disabled:opacity-50 mb-4 touch-manipulation"
             style={{ WebkitTapHighlightColor: "transparent" }}>
-            {saving ? "Đang thêm..." : "Thêm lịch"}
+            {saving ? "Đang thêm..." : selectedShiftIds.length > 1 ? `Thêm ${selectedShiftIds.length} ca vào lịch` : "Thêm lịch"}
           </button>
 
           {/* Week calendar — horizontal scroll */}
@@ -479,8 +533,8 @@ export default function PhanCaPage() {
                     const d = new Date(date + "T00:00:00");
                     const dow = JS_TO_DOW[d.getDay()];
                     const isPast = date < today;
-                    const alreadyHasSelected = dayShifts.some(a => String(a.shiftId) === selectedShiftId);
-                    const canAdd = selectedShiftId && !isPast && !alreadyHasSelected;
+                    const shiftsToAdd = selectedShiftIds.filter(id => !dayShifts.some(a => a.shiftId === id));
+                    const canAdd = shiftsToAdd.length > 0 && !isPast;
                     return (
                       <div key={date} className={`min-h-[90px] p-1.5 ${isToday ? "bg-primary/5" : ""}`}>
                         <div className="text-center mb-1.5">
@@ -501,23 +555,13 @@ export default function PhanCaPage() {
                           </div>
                         ))}
                         {canAdd && (
-                          <button onClick={() => {
-                            const body: Record<string, unknown> = {
-                              employeeId: selectedEmployee?.id, shiftId: Number(selectedShiftId),
-                              daysOfWeek: [dow], effectiveFrom: effectiveFrom || date,
-                            };
-                            if (effectiveTo) body.effectiveTo = effectiveTo;
-                            setSaving(true);
-                            fetch(`${BASE}/hr/shifts/assign`, { method: "POST", headers: getAuthHeaders(), body: JSON.stringify(body) })
-                              .then(r => r.text()).then(t => {
-                                const json = t ? JSON.parse(t) : null;
-                                if (json?.statusCode === 200) { showToast(`Đã thêm ${DOW_VI_FULL[dow]}`); if (selectedEmployee) loadAssignments(selectedEmployee.id); }
-                                else showToast(extractApiError(json, "Thất bại"));
-                              }).catch(() => showToast("Lỗi kết nối"))
-                              .finally(() => setSaving(false));
-                          }} disabled={saving}
+                          <button
+                            onPointerDown={e => { if (e.pointerType === "touch") { e.preventDefault(); if (!saving) quickAddToDay(dow, date); } }}
+                            onClick={() => quickAddToDay(dow, date)} disabled={saving}
                             className="w-full mt-0.5 py-0.5 rounded border border-dashed border-primary/40 text-primary text-[10px] font-bold hover:bg-primary/10 touch-manipulation"
-                            style={{ WebkitTapHighlightColor: "transparent" }}>+</button>
+                            style={{ WebkitTapHighlightColor: "transparent" }}>
+                            +{shiftsToAdd.length > 1 ? shiftsToAdd.length : ""}
+                          </button>
                         )}
                       </div>
                     );
@@ -576,20 +620,40 @@ export default function PhanCaPage() {
 
                   {/* Control panel */}
                   <div className="bg-canvas rounded-lg border border-hairline p-4 mb-4 space-y-4">
+                    {/* Step 1: multi-select shifts */}
                     <div>
-                      <label className="block text-[10px] font-bold text-muted uppercase tracking-wide mb-1.5">1. Chọn ca làm</label>
+                      <div className="flex items-center gap-3 mb-1.5">
+                        <label className="block text-[10px] font-bold text-muted uppercase tracking-wide">1. Chọn ca làm</label>
+                        {selectedShiftIds.length > 0 && (
+                          <span className="text-[10px] text-primary font-semibold bg-primary/10 px-2 py-0.5 rounded-full">
+                            {selectedShiftIds.length} ca đã chọn
+                          </span>
+                        )}
+                        {selectedShiftIds.length > 0 && (
+                          <button type="button" onClick={() => { setSelectedShiftIds([]); setFormError(""); }}
+                            className="text-[10px] text-muted-soft hover:text-red-400">✕ Bỏ chọn</button>
+                        )}
+                      </div>
                       <div className="flex gap-2 flex-wrap">
                         {activeShifts.length === 0 ? (
                           <p className="text-sm text-yellow-600">Chưa có ca nào. <Link href="/admin/nhan-su/ca-lam" className="underline">Tạo ca làm trước</Link></p>
-                        ) : activeShifts.map(s => (
-                          <button key={s.id} onClick={() => { setSelectedShiftId(String(s.id)); setFormError(""); }}
-                            className={`px-3 py-1.5 rounded border text-sm transition-colors ${selectedShiftId === String(s.id) ? "border-primary bg-primary/10 text-primary font-semibold" : "border-hairline text-ink hover:border-primary"}`}>
-                            <span className="font-medium">{s.name}</span>
-                            <span className="text-xs text-muted-soft ml-1.5">{s.startTime}–{s.endTime}</span>
-                          </button>
-                        ))}
+                        ) : activeShifts.map(s => {
+                          const checked = selectedShiftIds.includes(s.id);
+                          return (
+                            <button key={s.id} onClick={() => toggleShift(s.id)}
+                              className={`px-3 py-1.5 rounded border text-sm transition-colors flex items-center gap-2 ${checked ? "border-primary bg-primary/10 text-primary font-semibold ring-1 ring-primary/20" : "border-hairline text-ink hover:border-primary"}`}>
+                              <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${checked ? "bg-primary border-primary" : "border-gray-300"}`}>
+                                {checked && <span className="text-white text-[9px] font-bold leading-none">✓</span>}
+                              </span>
+                              <span className="font-medium">{s.name}</span>
+                              <span className="text-xs text-muted-soft">{s.startTime}–{s.endTime}</span>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
+
+                    {/* Step 2: days */}
                     <div>
                       <div className="flex items-center gap-3 mb-1.5">
                         <label className="text-[10px] font-bold text-muted uppercase tracking-wide">2. Ngày trong tuần</label>
@@ -610,6 +674,8 @@ export default function PhanCaPage() {
                         })}
                       </div>
                     </div>
+
+                    {/* Step 3: date range */}
                     <div>
                       <label className="block text-[10px] font-bold text-muted uppercase tracking-wide mb-1.5">3. Thời gian áp dụng</label>
                       <div className="flex gap-3 items-end flex-wrap">
@@ -630,10 +696,11 @@ export default function PhanCaPage() {
                         )}
                       </div>
                     </div>
+
                     <div className="flex items-center gap-3 pt-1 border-t border-hairline">
                       <button type="button" onClick={assignBatch} disabled={saving}
                         className="px-5 py-2 bg-primary text-white text-sm font-semibold rounded hover:bg-primary-dark disabled:opacity-40">
-                        {saving ? "Đang thêm..." : "Thêm lịch"}
+                        {saving ? "Đang thêm..." : selectedShiftIds.length > 1 ? `Thêm ${selectedShiftIds.length} ca vào lịch` : "Thêm lịch"}
                       </button>
                       <p className="text-xs text-muted-soft">
                         Hoặc chọn ca rồi bấm <span className="font-bold text-primary">+</span> trực tiếp vào ô ngày
@@ -664,8 +731,8 @@ export default function PhanCaPage() {
                           const d = new Date(date + "T00:00:00");
                           const dow = JS_TO_DOW[d.getDay()];
                           const isPast = date < today;
-                          const alreadyHasSelected = dayShifts.some(a => String(a.shiftId) === selectedShiftId);
-                          const canAdd = selectedShiftId && !isPast && !alreadyHasSelected;
+                          const shiftsToAdd = selectedShiftIds.filter(id => !dayShifts.some(a => a.shiftId === id));
+                          const canAdd = shiftsToAdd.length > 0 && !isPast;
                           return (
                             <div key={date} className={`min-h-[110px] p-2 ${isToday ? "bg-primary/5" : ""}`}>
                               <div className="text-center mb-2">
@@ -689,22 +756,10 @@ export default function PhanCaPage() {
                                 );
                               })}
                               {canAdd && (
-                                <button onClick={() => {
-                                  const body: Record<string, unknown> = {
-                                    employeeId: selectedEmployee?.id, shiftId: Number(selectedShiftId),
-                                    daysOfWeek: [dow], effectiveFrom: effectiveFrom || date,
-                                  };
-                                  if (effectiveTo) body.effectiveTo = effectiveTo;
-                                  setSaving(true);
-                                  fetch(`${BASE}/hr/shifts/assign`, { method: "POST", headers: getAuthHeaders(), body: JSON.stringify(body) })
-                                    .then(r => r.text()).then(t => {
-                                      const json = t ? JSON.parse(t) : null;
-                                      if (json?.statusCode === 200) { showToast(`Đã thêm ${DOW_VI_FULL[dow]}`); if (selectedEmployee) loadAssignments(selectedEmployee.id); }
-                                      else showToast(extractApiError(json, "Thất bại"));
-                                    }).catch(() => showToast("Lỗi kết nối"))
-                                    .finally(() => setSaving(false));
-                                }} disabled={saving}
-                                  className="w-full mt-1 py-0.5 rounded border border-dashed border-primary/40 text-primary text-[11px] font-bold hover:bg-primary/10 disabled:opacity-40">+</button>
+                                <button onClick={() => quickAddToDay(dow, date)} disabled={saving}
+                                  className="w-full mt-1 py-0.5 rounded border border-dashed border-primary/40 text-primary text-[11px] font-bold hover:bg-primary/10 disabled:opacity-40">
+                                  +{shiftsToAdd.length > 1 ? shiftsToAdd.length : ""}
+                                </button>
                               )}
                             </div>
                           );

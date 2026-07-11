@@ -30,7 +30,7 @@ export default function DangKyPage() {
     if (!form.username.trim()) return "Vui lòng nhập tên đăng nhập";
     if (form.username.trim().length < 3) return "Tên đăng nhập phải từ 3 ký tự";
     if (!form.password) return "Vui lòng nhập mật khẩu";
-    if (form.password.length < 6) return "Mật khẩu phải từ 6 ký tự";
+    if (form.password.length < 8) return "Mật khẩu phải từ 8 ký tự trở lên";
     if (form.password !== form.confirmPassword) return "Mật khẩu xác nhận không khớp";
     return null;
   }
@@ -154,6 +154,7 @@ export default function DangKyPage() {
                 {showPass ? "Ẩn" : "Hiện"}
               </button>
             </div>
+            <p className="text-[11px] text-muted-soft mt-1">Ít nhất 8 ký tự</p>
           </div>
 
           {/* Xác nhận mật khẩu */}

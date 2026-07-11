@@ -4,12 +4,10 @@ import { Product } from "@/lib/types";
 import { formatPrice } from "@/lib/utils";
 import AddDishButton from "@/components/menu/AddDishButton";
 
-const FALLBACK = (id: number) => `https://picsum.photos/seed/product-${id}/400/400`;
+const FALLBACK = "/images/no-image.svg";
 
 export default function ProductCard({ product }: { product: Product }) {
-  const imgSrc = product.imageUrl && !product.imageUrl.startsWith("/uploads/")
-    ? product.imageUrl
-    : FALLBACK(product.id);
+  const imgSrc = product.imageUrl || FALLBACK;
 
   return (
     <div className="bg-canvas border border-hairline rounded-xl overflow-hidden flex flex-col group hover:border-primary/50 hover:shadow-md transition-all duration-300">

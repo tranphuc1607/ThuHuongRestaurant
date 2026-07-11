@@ -125,9 +125,6 @@ export default function AdminUsersPage() {
       u.enabled ? "Đã khóa tài khoản" : "Đã kích hoạt tài khoản");
   }
 
-  function changeRole(u: User, newRole: string) {
-    patchUser(u.id, "role", { role: newRole }, `Đã đổi → ${ROLE_LABELS[newRole]}`);
-  }
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -250,16 +247,9 @@ export default function AdminUsersPage() {
 
                   {/* Row 2: Actions */}
                   <div className="flex items-center gap-2 pt-3 border-t border-hairline">
-                    {/* Role selector */}
-                    <select
-                      value={u.role}
-                      onChange={e => changeRole(u, e.target.value)}
-                      disabled={busy}
-                      className={`flex-1 text-xs font-semibold px-2 py-1.5 rounded-xl border border-hairline outline-none cursor-pointer disabled:opacity-50 ${ROLE_STYLE[u.role] ?? "bg-canvas text-muted"}`}>
-                      <option value="ROLE_USER">Người dùng</option>
-                      <option value="ROLE_EMPLOYEE">Nhân viên</option>
-                      <option value="ROLE_ADMIN">Admin</option>
-                    </select>
+                    <span className={`flex-1 text-xs font-semibold px-2 py-1.5 rounded-xl text-center ${ROLE_STYLE[u.role] ?? "bg-canvas text-muted"}`}>
+                      {ROLE_LABELS[u.role] ?? u.role}
+                    </span>
 
                     {/* Toggle status */}
                     <button
@@ -342,15 +332,9 @@ export default function AdminUsersPage() {
                   <td className="px-4 py-3 text-ink">{u.fullName ?? "—"}</td>
                   <td className="px-4 py-3 text-xs text-muted">{u.phone ?? u.email ?? "—"}</td>
                   <td className="px-4 py-3 text-center">
-                    <select
-                      value={u.role}
-                      onChange={e => changeRole(u, e.target.value)}
-                      disabled={actionLoading === u.id}
-                      className={`text-xs font-semibold px-2 py-0.5 rounded border-0 outline-none cursor-pointer ${ROLE_STYLE[u.role] ?? "bg-canvas text-muted"}`}>
-                      <option value="ROLE_USER">Người dùng</option>
-                      <option value="ROLE_EMPLOYEE">Nhân viên</option>
-                      <option value="ROLE_ADMIN">Admin</option>
-                    </select>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded ${ROLE_STYLE[u.role] ?? "bg-canvas text-muted"}`}>
+                      {ROLE_LABELS[u.role] ?? u.role}
+                    </span>
                   </td>
                   <td className="px-4 py-3 text-center">
                     <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${u.enabled ? "bg-green-100 text-green-700" : "bg-red-100 text-red-500"}`}>

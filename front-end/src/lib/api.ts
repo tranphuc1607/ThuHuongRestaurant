@@ -37,10 +37,10 @@ export type BackendProduct = {
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T | null> {
   try {
-    const res = await fetch(`${BASE_URL}${path}`, {
-      ...init,
-      next: { revalidate: 60 },
-    });
+    const fetchInit: RequestInit = init?.cache
+      ? { ...init }
+      : { ...init, next: { revalidate: 60 } };
+    const res = await fetch(`${BASE_URL}${path}`, fetchInit);
     if (!res.ok) return null;
     const json: ApiResponse<T> = await res.json();
     return json.data;
@@ -50,12 +50,13 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T | null> 
 }
 
 export const productsApi = {
-  list: (params?: { page?: number; size?: number; category?: string }) => {
+  list: (params?: { page?: number; size?: number; category?: string; status?: string }, init?: RequestInit) => {
     const q = new URLSearchParams();
     if (params?.page != null) q.set("page", String(params.page));
     if (params?.size != null) q.set("size", String(params.size));
     if (params?.category) q.set("category", params.category);
-    return apiFetch<Page<BackendProduct>>(`/products?${q.toString()}`);
+    if (params?.status) q.set("status", params.status);
+    return apiFetch<Page<BackendProduct>>(`/products?${q.toString()}`, init);
   },
   get: (id: number) => apiFetch<BackendProduct>(`/products/${id}`),
   search: (keyword: string, page = 0, size = 12) =>

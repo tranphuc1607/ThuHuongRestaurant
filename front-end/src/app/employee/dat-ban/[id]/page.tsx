@@ -247,7 +247,7 @@ export default function EmployeeBookingDetailPage() {
                 {booking.items.map((item) => (
                   <div key={item.id} className="flex items-center gap-3 py-1">
                     <img
-                      src={`https://picsum.photos/seed/product-${item.productId}/80/80`}
+                      src={"/images/no-image.svg"}
                       alt={item.productName}
                       className="w-10 h-10 object-cover rounded-lg flex-shrink-0"
                     />

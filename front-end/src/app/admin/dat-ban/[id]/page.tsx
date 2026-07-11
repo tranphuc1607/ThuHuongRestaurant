@@ -334,7 +334,7 @@ export default function BookingDetailPage() {
             <div className="divide-y divide-gray-100">
               {booking.items.map((item) => (
                 <div key={item.id} className="flex items-center gap-3 px-4 py-3">
-                  <img src={`https://picsum.photos/seed/product-${item.productId}/80/80`}
+                  <img src={"/images/no-image.svg"}
                     alt={item.productName} className="w-10 h-10 rounded-lg object-cover flex-shrink-0"/>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-gray-800 truncate">{item.productName}</div>
@@ -451,7 +451,7 @@ export default function BookingDetailPage() {
                   <tr key={item.id}>
                     <td className="py-2.5 font-medium text-gray-800">
                       <div className="flex items-center gap-2.5">
-                        <img src={`https://picsum.photos/seed/product-${item.productId}/80/80`}
+                        <img src={"/images/no-image.svg"}
                           alt={item.productName} className="w-9 h-9 rounded-lg object-cover flex-shrink-0"/>
                         {item.productName}
                       </div>

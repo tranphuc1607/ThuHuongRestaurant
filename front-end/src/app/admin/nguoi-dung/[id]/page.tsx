@@ -86,19 +86,8 @@ export default function UserDetailPage() {
         </div>
 
         <div>
-          <h2 className="text-xs font-bold text-muted uppercase tracking-wide mb-3">Phân quyền</h2>
-          <div className="flex items-center justify-between mb-3">
-            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${ROLE_STYLE[user.role] ?? "bg-canvas text-muted"}`}>{user.role}</span>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            {["ROLE_USER", "ROLE_EMPLOYEE", "ROLE_ADMIN"].map((r) => (
-              <button key={r} onClick={() => patchUser("role", { role: r }, `Đã đổi role → ${r}`)}
-                disabled={actionLoading || user.role === r}
-                className={`px-3 py-1.5 text-xs font-semibold rounded border transition-colors disabled:opacity-40 ${user.role === r ? "bg-canvas text-muted-soft border-hairline" : "bg-canvas text-gray-600 border-gray-300 hover:bg-surface-soft"}`}>
-                {r.replace("ROLE_", "")}
-              </button>
-            ))}
-          </div>
+          <h2 className="text-xs font-bold text-muted uppercase tracking-wide mb-2">Phân quyền</h2>
+          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${ROLE_STYLE[user.role] ?? "bg-canvas text-muted"}`}>{user.role}</span>
         </div>
 
         <div>
