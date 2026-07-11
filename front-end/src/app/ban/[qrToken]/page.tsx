@@ -1,4 +1,5 @@
 // Server component — no "use client"
+import Script from "next/script";
 const BACKEND = process.env.BACKEND_API_URL ?? "http://localhost:8080/api/v1";
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
 
@@ -120,6 +121,44 @@ export default async function TableQrPage({ params }: { params: Promise<{ qrToke
   return (
     <div style={{ minHeight: "100vh", background: "#f9fafb", fontFamily: "system-ui,-apple-system,sans-serif", paddingBottom: 90 }}>
 
+      {/* Meta ẩn để script ghi localStorage cho TableSessionFloat */}
+      <span id="qr-table-meta" data-token={qrToken} data-name={tableName ?? ""} style={{ display: "none" }} />
+
+      {/* ── In-app browser redirect ── */}
+      <script dangerouslySetInnerHTML={{ __html: `
+(function(){
+  var ua=navigator.userAgent||'';
+  // Zalo, Facebook, Instagram, Line, WeChat, Viber, TikTok in-app browsers
+  if(!/FBAN|FBAV|FB_IAB|Instagram|ZaloApp|Zalo\/|Line\/|MicroMessenger|Viber|TikTok/.test(ua))return;
+  if(/Android/.test(ua)){
+    // Dùng Android intent để mở bằng trình duyệt mặc định (Chrome)
+    location.href='intent://'+location.host+location.pathname+location.search
+      +'#Intent;scheme='+(location.protocol==='https:'?'https':'http')+';end';
+    return;
+  }
+  // iOS / unknown — hiện overlay hướng dẫn
+  function showOverlay(){
+    var ov=document.createElement('div');
+    ov.id='ib-overlay';
+    ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.88);display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;';
+    ov.innerHTML=
+      '<div style="background:#fff;border-radius:20px;padding:28px 24px;text-align:center;max-width:300px;width:100%">'
+      +'<div style="font-size:44px;margin-bottom:12px">🌐</div>'
+      +'<p style="font-size:17px;font-weight:700;color:#1f2937;margin:0 0 8px">Mở bằng trình duyệt</p>'
+      +'<p style="font-size:14px;color:#6b7280;margin:0 0 18px;line-height:1.6">Trang này cần mở bằng Safari hoặc Chrome để hoạt động đúng.</p>'
+      +'<p style="font-size:13px;background:#f3f4f6;border-radius:10px;padding:10px 14px;color:#374151;margin:0 0 16px;line-height:1.7">'
+      +'1. Nhấn biểu tượng <b>⎙</b> hoặc <b>···</b><br>2. Chọn <b>"Mở trong Safari"</b> / <b>"Mở bằng trình duyệt"</b></p>'
+      +'<button onclick="document.getElementById(\'ib-overlay\').remove()" '
+      +'style="background:#ea580c;color:#fff;border:none;border-radius:10px;padding:12px 0;font-size:15px;font-weight:700;cursor:pointer;width:100%">'
+      +'Bỏ qua, mở tại đây</button>'
+      +'</div>';
+    document.body.appendChild(ov);
+  }
+  if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',showOverlay);}
+  else{showOverlay();}
+})();
+      `}} />
+
       {/* ── Polling + scroll restore ── */}
       <script dangerouslySetInnerHTML={{ __html: `
 (function(){
@@ -155,7 +194,24 @@ export default async function TableQrPage({ params }: { params: Promise<{ qrToke
       `}} />
 
       {/* ── Header ── */}
-      <div style={{ background: "#ea580c", color: "#fff", padding: "28px 20px 14px", textAlign: "center" }}>
+      <div style={{ background: "#ea580c", color: "#fff", padding: "28px 20px 14px", textAlign: "center", position: "relative" }}>
+        {/* Nút thoát về trang chủ — góc trên trái */}
+        <a
+          href="/"
+          style={{
+            position: "absolute", top: 12, left: 12,
+            display: "flex", alignItems: "center", gap: 5,
+            background: "rgba(255,255,255,0.18)", color: "#fff",
+            borderRadius: 99, padding: "5px 12px 5px 8px",
+            fontSize: 12, fontWeight: 600, textDecoration: "none",
+            backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)",
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5M12 5l-7 7 7 7" />
+          </svg>
+          Trang chủ
+        </a>
         <p style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 2, opacity: 0.7, margin: "0 0 4px" }}>Nhà hàng Thu Hương</p>
         <h1 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 6px" }}>{tableName || "Thu Hương"}</h1>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 11, opacity: 0.75 }}>
@@ -406,85 +462,9 @@ export default async function TableQrPage({ params }: { params: Promise<{ qrToke
         </div>
       </div>
 
-      {/* ── Payment bottom sheet ── */}
-      {remaining > 0 && (
-        <>
-          <div id="pay-modal-bg" style={{ display: "none", position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 60 }} />
-          <div id="pay-modal" style={{ display: "none", position: "fixed", bottom: 0, left: 0, right: 0, background: "#fff", borderRadius: "20px 20px 0 0", zIndex: 70, maxHeight: "85vh", overflowY: "auto" }}>
-            {/* handle */}
-            <div style={{ padding: "10px 0 4px", display: "flex", justifyContent: "center" }}>
-              <div style={{ width: 40, height: 4, background: "#e5e7eb", borderRadius: 2 }} />
-            </div>
-
-            {/* idle — choose method */}
-            <div id="pay-idle" style={{ padding: "8px 16px 28px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-                <span style={{ fontSize: 20 }}>💳</span>
-                <span style={{ fontSize: 16, fontWeight: 700, color: "#1f2937" }}>Thanh toán</span>
-                <span style={{ marginLeft: "auto", fontSize: 18, fontWeight: 900, color: "#c2410c" }}>{fmt(remaining)}</span>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-                <button id="pay-btn-cash" style={{ padding: "20px 8px", background: "#fffbeb", border: "2px solid #fcd34d", borderRadius: 14, cursor: "pointer", textAlign: "center" }}>
-                  <div style={{ fontSize: 32 }}>💵</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: "#92400e", marginTop: 6 }}>Tiền mặt</div>
-                  <div style={{ fontSize: 11, color: "#a16207", marginTop: 2 }}>Nhân viên ra thu</div>
-                </button>
-                <button id="pay-btn-bt" style={{ padding: "20px 8px", background: "#eff6ff", border: "2px solid #93c5fd", borderRadius: 14, cursor: "pointer", textAlign: "center" }}>
-                  <div style={{ fontSize: 32 }}>📲</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1e40af", marginTop: 6 }}>Chuyển khoản</div>
-                  <div style={{ fontSize: 11, color: "#3b82f6", marginTop: 2 }}>Quét QR VietQR</div>
-                </button>
-              </div>
-              <button id="pay-btn-cancel" style={{ width: "100%", padding: "10px", background: "none", border: "none", color: "#9ca3af", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Huỷ</button>
-            </div>
-
-            {/* confirm */}
-            <div id="pay-confirm" style={{ display: "none", padding: "12px 16px 28px", textAlign: "center" }}>
-              <div id="pay-confirm-icon" style={{ fontSize: 48, marginBottom: 10 }}></div>
-              <p id="pay-confirm-method" style={{ fontSize: 15, fontWeight: 700, color: "#1f2937", margin: "0 0 6px" }}></p>
-              <p id="pay-confirm-amount" style={{ fontSize: 24, fontWeight: 900, color: "#c2410c", margin: "0 0 8px" }}></p>
-              <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 20px" }}>Bạn chắc chắn muốn thanh toán theo phương thức này?</p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <button id="pay-btn-back" style={{ padding: "14px", background: "#f3f4f6", border: "none", borderRadius: 12, fontSize: 14, fontWeight: 600, color: "#6b7280", cursor: "pointer" }}>← Quay lại</button>
-                <button id="pay-btn-confirm" style={{ padding: "14px", background: "#15803d", color: "#fff", border: "none", borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Xác nhận ✓</button>
-              </div>
-            </div>
-
-            {/* cash-sent */}
-            <div id="pay-cash-sent" style={{ display: "none", padding: "32px 16px 36px", textAlign: "center" }}>
-              <div style={{ fontSize: 60, marginBottom: 16 }}>✅</div>
-              <p style={{ fontSize: 17, fontWeight: 700, color: "#15803d", margin: "0 0 8px" }}>Đã gửi yêu cầu!</p>
-              <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>Nhân viên sẽ ra {tableName || "bàn"} thu tiền ngay</p>
-            </div>
-
-            {/* qr */}
-            <div id="pay-qr" style={{ display: "none", padding: "16px 16px 28px", textAlign: "center" }}>
-              <p style={{ fontSize: 13, color: "#6b7280", margin: "0 0 12px" }}>
-                Quét mã để thanh toán <strong style={{ color: "#c2410c" }}>{fmt(remaining)}</strong>
-              </p>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img id="pay-qr-img" src="" alt="VietQR" style={{ width: "100%", maxWidth: 280, borderRadius: 14, border: "1px solid #e5e7eb" }} />
-              <div style={{ marginTop: 12, fontSize: 12, color: "#6b7280" }}>⏳ Đang chờ xác nhận...</div>
-            </div>
-
-            {/* done */}
-            <div id="pay-done" style={{ display: "none", padding: "32px 16px 36px", textAlign: "center" }}>
-              <div style={{ fontSize: 60, marginBottom: 16 }}>🎉</div>
-              <p style={{ fontSize: 17, fontWeight: 700, color: "#15803d", margin: "0 0 8px" }}>Thanh toán thành công!</p>
-              <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>Cảm ơn quý khách đã dùng bữa tại Thu Hương</p>
-            </div>
-
-            {/* error */}
-            <div id="pay-error" style={{ display: "none", padding: "24px 16px 28px", textAlign: "center" }}>
-              <p id="pay-error-msg" style={{ fontSize: 13, color: "#dc2626", marginBottom: 12 }}></p>
-              <button id="pay-btn-retry" style={{ padding: "10px 24px", background: "#f3f4f6", border: "none", borderRadius: 10, fontSize: 13, cursor: "pointer" }}>Thử lại</button>
-            </div>
-          </div>
-        </>
-      )}
 
       {/* ── Drawer toggle arrow — vùng bấm trong suốt mở rộng xung quanh mũi tên ── */}
-      <button id="drawer-toggle-btn" style={{ position: "fixed", right: 0, top: "50%", transform: "translateY(-50%)", zIndex: 55, border: "none", cursor: "pointer", background: "transparent", padding: "70px 0 70px 52px", WebkitTapHighlightColor: "transparent" }}>
+      <button id="drawer-toggle-btn" style={{ position: "fixed", right: 0, top: "50%", transform: "translateY(-50%)", zIndex: 55, border: "none", cursor: "pointer", background: "transparent", padding: "70px 0 70px 52px", WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}>
         <span id="drawer-arrow" style={{ display: "block", background: "#f97316", color: "#fff", borderRadius: "12px 0 0 12px", padding: "44px 7px", fontSize: 20, fontWeight: 700, lineHeight: 1, boxShadow: "-3px 0 10px rgba(0,0,0,0.15)" }}>‹</span>
       </button>
 
@@ -524,40 +504,68 @@ export default async function TableQrPage({ params }: { params: Promise<{ qrToke
             <div style={{ fontSize: 13, color: "#9ca3af" }}>Chưa có đơn hàng</div>
           )}
         </div>
-        {remaining > 0 && (
-          <button id="pay-float-btn" style={{ padding: "10px 14px", background: "#15803d", color: "#fff", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
-            💳 Thanh toán
-          </button>
-        )}
       </div>
 
       {/* ── Interaction script ── */}
-      <script dangerouslySetInnerHTML={{ __html: `
+      <Script id="qr-interaction" strategy="afterInteractive" dangerouslySetInnerHTML={{ __html: `
 (function(){
+  /* Lưu phiên bàn để TableSessionFloat hiện khi khách ra trang chủ */
+  try{
+    var _m=document.getElementById('qr-table-meta');
+    if(_m){
+      var _tk=_m.getAttribute('data-token');
+      var _nm=_m.getAttribute('data-name')||'Bàn';
+      if(_tk) localStorage.setItem('qr_active_table',JSON.stringify({token:_tk,name:_nm,ts:Date.now()}));
+    }
+  }catch(e){}
   /* DRAWER */
   var drawerOpen=false;
   function openDrawer(){
     drawerOpen=true;
-    document.getElementById('order-overlay').style.display='block';
-    document.getElementById('order-drawer').style.transform='translateX(0%)';
+    var ov=document.getElementById('order-overlay');
+    var dr=document.getElementById('order-drawer');
+    var ar=document.getElementById('drawer-arrow');
+    if(ov) ov.style.display='block';
+    if(dr) dr.style.transform='translateX(0%)';
+    if(ar) ar.textContent='›';
     document.body.style.overflow='hidden';
-    var t=document.getElementById('drawer-arrow');
-    if(t) t.textContent='›';
   }
   function closeDrawer(){
     drawerOpen=false;
-    document.getElementById('order-overlay').style.display='none';
-    document.getElementById('order-drawer').style.transform='translateX(100%)';
+    var ov=document.getElementById('order-overlay');
+    var dr=document.getElementById('order-drawer');
+    var ar=document.getElementById('drawer-arrow');
+    if(ov) ov.style.display='none';
+    if(dr) dr.style.transform='translateX(100%)';
+    if(ar) ar.textContent='‹';
     document.body.style.overflow='';
-    var t=document.getElementById('drawer-arrow');
-    if(t) t.textContent='‹';
+  }
+  function toggleDrawer(){ drawerOpen?closeDrawer():openDrawer(); }
+  // pointerdown + click để cover mọi thiết bị; preventDefault trên touch ngăn double-fire
+  function bindBtn(el,fn){
+    if(!el)return;
+    var touchFired=false;
+    el.addEventListener('pointerdown',function(e){
+      if(e.pointerType==='touch'){
+        touchFired=true;
+        e.preventDefault();
+        fn();
+        setTimeout(function(){touchFired=false;},400);
+      }
+    });
+    el.addEventListener('click',function(){if(!touchFired){fn();}});
   }
   var toggleBtn=document.getElementById('drawer-toggle-btn');
   var closeBtn=document.getElementById('drawer-close');
   var overlay=document.getElementById('order-overlay');
-  if(toggleBtn) toggleBtn.addEventListener('click',function(){ drawerOpen?closeDrawer():openDrawer(); });
-  if(closeBtn) closeBtn.addEventListener('click',closeDrawer);
-  if(overlay) overlay.addEventListener('click',closeDrawer);
+  bindBtn(toggleBtn,toggleDrawer);
+  bindBtn(closeBtn,closeDrawer);
+  if(overlay){
+    overlay.addEventListener('click',closeDrawer);
+    overlay.addEventListener('pointerdown',function(e){
+      if(e.pointerType==='touch'){e.preventDefault();closeDrawer();}
+    });
+  }
   // Khôi phục trạng thái drawer + scroll position sau khi reload
   var restoreDrawer=sessionStorage.getItem('qr_drawer');
   if(restoreDrawer){
@@ -645,86 +653,6 @@ export default async function TableQrPage({ params }: { params: Promise<{ qrToke
     });
   }
 
-  /* PAYMENT */
-  var payFloatBtn=document.getElementById('pay-float-btn');
-  var payModalBg=document.getElementById('pay-modal-bg');
-  var payModal=document.getElementById('pay-modal');
-  if(!payFloatBtn||!payModal) return;
-
-  var payStates=['idle','confirm','cash-sent','qr','done','error'];
-  var pollId=null;
-  var selectedMethod=null;
-
-  function showPay(s){
-    payStates.forEach(function(n){
-      var el=document.getElementById('pay-'+n);
-      if(el) el.style.display=(n===s)?'':'none';
-    });
-  }
-  function openPay(){
-    if(payModalBg) payModalBg.style.display='block';
-    payModal.style.display='block';
-    showPay('idle');
-  }
-  function closePay(){
-    if(payModalBg) payModalBg.style.display='none';
-    payModal.style.display='none';
-    if(pollId){clearInterval(pollId);pollId=null;}
-  }
-  function fmtVnd(v){
-    return new Intl.NumberFormat('vi-VN',{style:'currency',currency:'VND'}).format(v);
-  }
-  function showConfirm(method){
-    selectedMethod=method;
-    var isCash=method==='CASH';
-    document.getElementById('pay-confirm-icon').textContent=isCash?'💵':'📲';
-    document.getElementById('pay-confirm-method').textContent=isCash?'Tiền mặt — Nhân viên ra thu':'Chuyển khoản — Quét QR VietQR';
-    document.getElementById('pay-confirm-amount').textContent=fmtVnd(${remaining});
-    showPay('confirm');
-  }
-  function doRequest(method){
-    var btn=document.getElementById('pay-btn-confirm');
-    btn.disabled=true; btn.textContent='Đang gửi...';
-    fetch('/api/payment-request',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({qrToken:${JSON.stringify(qrToken)},paymentMethod:method})
-    })
-    .then(function(r){return r.json();})
-    .then(function(json){
-      if(json.statusCode!==200||!json.data){
-        document.getElementById('pay-error-msg').textContent=json.message||'Có lỗi xảy ra';
-        showPay('error'); return;
-      }
-      var pid=json.data.id;
-      if(method==='CASH'){
-        showPay('cash-sent');
-      } else {
-        document.getElementById('pay-qr-img').src=json.data.vietQrUrl||'';
-        showPay('qr');
-        pollId=setInterval(function(){
-          fetch('/api/payment-status/'+pid)
-            .then(function(r){return r.json();})
-            .then(function(j){
-              if(j.data&&j.data.status==='COMPLETED'){clearInterval(pollId);showPay('done');}
-            }).catch(function(){});
-        },3000);
-      }
-    })
-    .catch(function(){
-      document.getElementById('pay-error-msg').textContent='Không kết nối được máy chủ';
-      showPay('error');
-    });
-  }
-
-  payFloatBtn.addEventListener('click',openPay);
-  if(payModalBg) payModalBg.addEventListener('click',closePay);
-  document.getElementById('pay-btn-cash').addEventListener('click',function(){showConfirm('CASH');});
-  document.getElementById('pay-btn-bt').addEventListener('click',function(){showConfirm('BANK_TRANSFER');});
-  document.getElementById('pay-btn-back').addEventListener('click',function(){showPay('idle');});
-  document.getElementById('pay-btn-confirm').addEventListener('click',function(){doRequest(selectedMethod);});
-  document.getElementById('pay-btn-cancel').addEventListener('click',closePay);
-  document.getElementById('pay-btn-retry').addEventListener('click',function(){showPay('idle');});
 })();
       `}} />
     </div>

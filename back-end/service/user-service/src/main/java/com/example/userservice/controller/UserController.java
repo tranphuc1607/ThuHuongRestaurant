@@ -1,6 +1,7 @@
 package com.example.userservice.controller;
 
 import com.example.userservice.entity.DTO.req.CreateUserRequest;
+import com.example.userservice.entity.DTO.req.ProvisionUserRequest;
 import com.example.userservice.entity.DTO.req.UpdateProfileRequest;
 import com.example.userservice.entity.DTO.req.UpdateRoleRequest;
 import com.example.userservice.entity.DTO.res.UserResponse;
@@ -18,6 +19,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/users")
@@ -26,6 +28,12 @@ public class UserController {
 
     private final UserService userService;
 
+
+    @PostMapping("/provision")
+    public ResponseEntity<?> provisionUser(@RequestBody ProvisionUserRequest req) {
+        userService.provisionUser(req.getUsername(), req.getRole());
+        return ResponseEntity.ok(Map.of("message", "OK"));
+    }
 
     @GetMapping("/me")
     public ResponseEntity<UserResponse> getCurrentUser(@AuthenticationPrincipal Jwt jwt) {

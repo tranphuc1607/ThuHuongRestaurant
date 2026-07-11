@@ -29,6 +29,17 @@ public class UserService {
     private final HrServiceClient hrServiceClient;
 
     @Transactional
+    public void provisionUser(String username, String role) {
+        if (!userRepository.existsByUsername(username)) {
+            userRepository.save(User.builder()
+                    .username(username)
+                    .role(role != null ? role : "ROLE_USER")
+                    .enabled(true)
+                    .build());
+        }
+    }
+
+    @Transactional
     public UserResponse getCurrentUser(String username, String role) {
         return userRepository.findByUsername(username)
                 .map(UserResponse::from)

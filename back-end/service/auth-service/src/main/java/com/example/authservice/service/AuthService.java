@@ -1,5 +1,7 @@
 package com.example.authservice.service;
 
+import com.example.authservice.client.UserServiceClient;
+import com.example.authservice.client.dto.ProvisionUserRequest;
 import com.example.authservice.entity.DTO.req.LoginRequest;
 import com.example.authservice.entity.DTO.req.RegisterRequest;
 import com.example.authservice.entity.DTO.res.LoginResponse;
@@ -7,6 +9,7 @@ import com.example.authservice.entity.Auth;
 import com.example.authservice.repository.AuthRepository;
 import com.example.authservice.util.SecurityUtil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
@@ -18,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.example.restaurant_common.util.exception.MessageException;
 import java.util.Map;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -25,6 +29,7 @@ public class AuthService {
     private final AuthRepository authRepository;
     private final SecurityUtil securityUtil;
     private final PasswordEncoder passwordEncoder;
+    private final UserServiceClient userServiceClient;
 
     @Value("${app.jwt.refresh-token-validity-in-seconds}")
     private long refreshTokenExpiration;
@@ -48,6 +53,13 @@ public class AuthService {
         auth.setLocked(false);
 
         Auth savedAuth = authRepository.save(auth);
+
+        try {
+            userServiceClient.provision(new ProvisionUserRequest(savedAuth.getUsername(), savedAuth.getRole()));
+        } catch (Exception e) {
+            log.warn("Provision user-service failed for '{}': {}", savedAuth.getUsername(), e.getMessage());
+        }
+
         return Map.of("id", savedAuth.getId(), "username", savedAuth.getUsername(), "role", savedAuth.getRole());
     }
 

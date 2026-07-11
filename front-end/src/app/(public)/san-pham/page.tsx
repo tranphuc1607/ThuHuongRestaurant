@@ -22,16 +22,15 @@ const CATEGORIES = [
 const PAGE_SIZE = 12;
 
 function resolveImage(imageUrl: string | null, id: number): string {
-  if (!imageUrl || imageUrl.startsWith("/uploads/")) {
-    return `https://picsum.photos/seed/product-${id}/400/300`;
-  }
+  if (!imageUrl) return `/images/no-image.svg`;
+  if (imageUrl.startsWith("/")) return imageUrl;
   try {
     const { hostname } = new URL(imageUrl);
     if (["restaurant.com", "localhost", "example.com", "placehold.co"].includes(hostname)) {
-      return `https://picsum.photos/seed/product-${id}/400/300`;
+      return `/images/no-image.svg`;
     }
   } catch {
-    return `https://picsum.photos/seed/product-${id}/400/300`;
+    return `/images/no-image.svg`;
   }
   return imageUrl;
 }

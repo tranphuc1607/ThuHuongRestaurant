@@ -10,7 +10,6 @@ import {
   removeDish,
   clearDishes,
   restoreDishes,
-  buildNotesFromDishes,
   getTotalCount,
   CART_EVENT,
   DishItem,
@@ -90,7 +89,7 @@ function BookingFormContent() {
   const [form, setForm] = useState<FormState>(() => {
     try {
       const saved = sessionStorage.getItem(FORM_KEY);
-      if (saved) return { ...JSON.parse(saved) };
+      if (saved) return { ...JSON.parse(saved), notes: "" };
     } catch {}
     return {
       customerName: "",
@@ -203,12 +202,6 @@ function BookingFormContent() {
     try { sessionStorage.setItem(FORM_KEY, JSON.stringify(form)); } catch {}
   }, [form]);
 
-  // Khi dishes thay đổi, tự cập nhật notes (chỉ khi user chưa tự gõ gì)
-  useEffect(() => {
-    if (dishes.length > 0) {
-      setForm((p) => ({ ...p, notes: buildNotesFromDishes(dishes) }));
-    }
-  }, [dishes]);
 
   const availableSlots = useMemo(() => {
     if (form.date !== todayVN) return TIME_SLOTS;
@@ -594,10 +587,10 @@ function BookingFormContent() {
                   <div key={d.id} className="flex items-center gap-3 px-3 py-2">
                     {/* thumbnail */}
                     <img
-                      src={d.imageUrl || `https://picsum.photos/seed/product-${d.id}/80/80`}
+                      src={d.imageUrl || `/images/no-image.svg`}
                       alt={d.name}
                       className="w-11 h-11 object-cover flex-shrink-0 rounded"
-                      onError={(e) => { (e.currentTarget as HTMLImageElement).src = `https://picsum.photos/seed/product-${d.id}/80/80`; }}
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).src = `/images/no-image.svg`; }}
                     />
                     <span className="flex-1 text-sm text-ink font-medium leading-tight">{d.name}</span>
                     <span className="text-xs text-primary font-bold">{formatPrice(d.price)}</span>

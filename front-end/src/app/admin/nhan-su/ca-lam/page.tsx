@@ -21,6 +21,15 @@ export default function ShiftsPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [toast, setToast] = useState("");
 
+  function normalizeTime(val: string): string {
+    const d = val.replace(/\D/g, "");
+    if (!d) return "";
+    if (d.length === 1) return "0" + d + ":00";
+    if (d.length === 2) return d + ":00";
+    if (d.length === 3) return "0" + d[0] + ":" + d.slice(1);
+    return d.slice(0, 2) + ":" + d.slice(2, 4);
+  }
+
   async function load() {
     setLoading(true);
     const res = await fetch(`${BASE}/hr/shifts`, { headers: getAuthHeaders() });
@@ -117,16 +126,20 @@ export default function ShiftsPage() {
                 placeholder="VD: Ca sáng"
                 className="w-full border border-hairline px-3 py-2.5 text-sm outline-none focus:border-primary rounded-xl" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase">Giờ bắt đầu *</label>
-                <input type="time" value={form.startTime} onChange={(e) => setForm(p => ({ ...p, startTime: e.target.value }))}
-                  className="w-full border border-hairline px-3 py-2.5 text-sm outline-none focus:border-primary rounded-xl" />
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Bắt đầu *</label>
+                <input type="text" inputMode="numeric" placeholder="08:00" value={form.startTime}
+                  onChange={(e) => setForm(p => ({ ...p, startTime: e.target.value }))}
+                  onBlur={(e) => setForm(p => ({ ...p, startTime: normalizeTime(e.target.value) }))}
+                  className="w-full border border-hairline px-2 py-2 text-sm text-center outline-none focus:border-primary rounded-lg" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase">Giờ kết thúc *</label>
-                <input type="time" value={form.endTime} onChange={(e) => setForm(p => ({ ...p, endTime: e.target.value }))}
-                  className="w-full border border-hairline px-3 py-2.5 text-sm outline-none focus:border-primary rounded-xl" />
+                <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Kết thúc *</label>
+                <input type="text" inputMode="numeric" placeholder="17:00" value={form.endTime}
+                  onChange={(e) => setForm(p => ({ ...p, endTime: e.target.value }))}
+                  onBlur={(e) => setForm(p => ({ ...p, endTime: normalizeTime(e.target.value) }))}
+                  className="w-full border border-hairline px-2 py-2 text-sm text-center outline-none focus:border-primary rounded-lg" />
               </div>
             </div>
             {formError && <div className="text-red-500 text-sm">{formError}</div>}
@@ -173,16 +186,20 @@ export default function ShiftsPage() {
                       <input value={editForm.name} onChange={(e) => setEditForm(p => ({ ...p, name: e.target.value }))}
                         className="w-full border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-primary rounded-xl bg-white" />
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase">Bắt đầu</label>
-                        <input type="time" value={editForm.startTime} onChange={(e) => setEditForm(p => ({ ...p, startTime: e.target.value }))}
-                          className="w-full border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-primary rounded-xl bg-white" />
+                        <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Bắt đầu</label>
+                        <input type="text" inputMode="numeric" placeholder="08:00" value={editForm.startTime}
+                          onChange={(e) => setEditForm(p => ({ ...p, startTime: e.target.value }))}
+                          onBlur={(e) => setEditForm(p => ({ ...p, startTime: normalizeTime(e.target.value) }))}
+                          className="w-full border border-gray-200 px-2 py-2 text-sm text-center outline-none focus:border-primary rounded-lg bg-white" />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase">Kết thúc</label>
-                        <input type="time" value={editForm.endTime} onChange={(e) => setEditForm(p => ({ ...p, endTime: e.target.value }))}
-                          className="w-full border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-primary rounded-xl bg-white" />
+                        <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase">Kết thúc</label>
+                        <input type="text" inputMode="numeric" placeholder="17:00" value={editForm.endTime}
+                          onChange={(e) => setEditForm(p => ({ ...p, endTime: e.target.value }))}
+                          onBlur={(e) => setEditForm(p => ({ ...p, endTime: normalizeTime(e.target.value) }))}
+                          className="w-full border border-gray-200 px-2 py-2 text-sm text-center outline-none focus:border-primary rounded-lg bg-white" />
                       </div>
                     </div>
                     {editError && <p className="text-red-500 text-xs">{editError}</p>}

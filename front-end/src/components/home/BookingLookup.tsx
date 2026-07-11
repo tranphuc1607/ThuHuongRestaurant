@@ -148,6 +148,7 @@ export default function BookingLookup() {
               onChange={(e) => setInput(e.target.value)}
               placeholder={tab === "code" ? "Nhập mã đặt bàn (VD: TH-20240001)" : "Nhập số điện thoại"}
               className="flex-1 border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-primary"
+              suppressHydrationWarning
             />
             <button
               type="submit"

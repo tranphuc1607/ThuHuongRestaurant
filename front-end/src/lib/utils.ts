@@ -23,7 +23,14 @@ function isTechnical(s: string): boolean {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function extractApiError(json: any, fallback: string): string {
-  const msg = String(json?.message ?? "");
+  // message có thể là object (map field→error từ MethodArgumentNotValidException)
+  const rawMsg = json?.message;
+  let msg = "";
+  if (rawMsg && typeof rawMsg === "object") {
+    msg = Object.values(rawMsg).join(", ");
+  } else {
+    msg = String(rawMsg ?? "");
+  }
   const err = String(json?.error ?? "");
   if (msg && !GENERIC_EN.has(msg) && !isTechnical(msg)) return msg;
   if (err && !GENERIC_EN.has(err) && !isTechnical(err)) return err;

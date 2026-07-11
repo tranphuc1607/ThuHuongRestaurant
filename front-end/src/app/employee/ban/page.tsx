@@ -512,8 +512,33 @@ function PanelContent({
   origin, refundLoading, cancelLoading,
   onClose, onRefund, onCancel, onManage, onCheckout,
 }: PanelProps) {
+  const [showQrZoom, setShowQrZoom] = useState(false);
   return (
     <>
+      {/* QR Zoom Modal */}
+      {showQrZoom && origin && (
+        <div
+          className="fixed inset-0 z-[200] bg-black/85 flex items-center justify-center px-4"
+          onClick={() => setShowQrZoom(false)}>
+          <div
+            className="bg-white rounded-3xl shadow-2xl p-6 flex flex-col items-center gap-4 w-full max-w-xs"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between w-full">
+              <p className="text-sm font-bold text-gray-800">{selectedTable.name}</p>
+              <button
+                onClick={() => setShowQrZoom(false)}
+                className="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 text-base touch-manipulation"
+                style={{ WebkitTapHighlightColor: "transparent" }}>
+                ✕
+              </button>
+            </div>
+            <div className="p-3 bg-white rounded-2xl border border-gray-100 shadow-inner">
+              <QRCodeSVG value={`${origin}/ban/${selectedTable.qrToken}`} size={240} level="M" />
+            </div>
+            <p className="text-xs text-gray-400 text-center">Cho khách quét để theo dõi đơn theo thời gian thực</p>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className={`flex items-center justify-between px-4 py-3 border-b border-hairline flex-shrink-0 ${
         panelNeedRefund ? "bg-amber-50" : "bg-orange-50"
@@ -536,12 +561,21 @@ function PanelContent({
       <div className="flex-1 overflow-y-auto p-4 min-h-0">
         {origin && (
           <div className="mb-3 bg-white border border-hairline rounded-xl p-3 flex items-center gap-3">
-            <div className="flex-shrink-0">
+            <button
+              className="flex-shrink-0 cursor-pointer hover:opacity-75 transition-opacity touch-manipulation"
+              onClick={() => setShowQrZoom(true)}
+              style={{ WebkitTapHighlightColor: "transparent" }}>
               <QRCodeSVG value={`${origin}/ban/${selectedTable.qrToken}`} size={64} level="M" />
-            </div>
-            <div className="min-w-0">
+            </button>
+            <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold text-ink">Cho khách quét</p>
               <p className="text-[11px] text-muted-soft mt-0.5">Xem đơn theo thời gian thực</p>
+              <button
+                onClick={() => setShowQrZoom(true)}
+                className="text-[10px] text-primary font-semibold mt-0.5 touch-manipulation"
+                style={{ WebkitTapHighlightColor: "transparent" }}>
+                Bấm để phóng to →
+              </button>
             </div>
           </div>
         )}

@@ -217,7 +217,7 @@ export default function BookingItemsEditor({
           {cart.map((item) => (
             <div key={item.productId} className="flex items-center gap-3 px-5 py-3">
               <img
-                src={`https://picsum.photos/seed/product-${item.productId}/80/80`}
+                src={`/images/no-image.svg`}
                 alt={item.productName}
                 className="w-11 h-11 object-cover rounded flex-shrink-0"
               />
