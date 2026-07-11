@@ -79,12 +79,13 @@ export default async function SanPhamPage({
     apiData = await productsApi.list({ page, size: PAGE_SIZE, category });
   }
 
-  const products: Product[] =
+  const products: Product[] = (
     apiData && apiData.content.length > 0
       ? apiData.content.map(mapProduct)
       : !category && !keyword
       ? mockProducts
-      : [];
+      : []
+  ).filter((p) => !p.name.toLowerCase().includes("bia cốc"));
 
   const totalPages = apiData?.totalPages ?? (products.length > 0 ? 1 : 0);
   const totalElements = apiData?.totalElements ?? products.length;

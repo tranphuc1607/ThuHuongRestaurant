@@ -52,7 +52,7 @@ export default async function HomePage() {
       ...page1.content,
       ...(page2?.content ?? []),
     ];
-    allProducts = raw.map(mapBackendProduct);
+    allProducts = raw.map(mapBackendProduct).filter((p) => !p.name.toLowerCase().includes("bia cốc"));
   } else {
     // Backend chưa chạy → dùng mock data
     allProducts = mockProducts;
