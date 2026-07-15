@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense, useRef } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { getAuthHeaders } from "@/lib/auth";
@@ -10,6 +10,7 @@ const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api/v1";
 interface Employee {
   id: number; name: string; phone?: string; type: string; salaryType: string;
   baseValue: number; targetDays?: number; active: boolean; telegramId?: number;
+  hasFace?: boolean;
 }
 interface ShiftAssignment {
   id: number; shiftId: number; shiftName: string; dayOfWeek: string;
@@ -25,7 +26,7 @@ const DOW_VI: Record<string, string> = {
 };
 const DAYS_ORDER = ["MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY","SUNDAY"];
 
-type Tab = "info" | "shifts";
+type Tab = "info" | "shifts" | "face";
 
 function EmployeeDetailContent() {
   const { id } = useParams<{ id: string }>();
@@ -51,6 +52,127 @@ function EmployeeDetailContent() {
   const [assignLoading, setAssignLoading] = useState(false);
   const [assignError, setAssignError] = useState("");
   const [showAssignForm, setShowAssignForm] = useState(false);
+
+  // --- Face registration ---
+  type FacePhase = "idle" | "camera" | "capturing" | "captured" | "saving" | "done";
+  const [facePhase, setFacePhase] = useState<FacePhase>("idle");
+  const [faceCapCount, setFaceCapCount] = useState(0);
+  const [faceCaptured, setFaceCaptured] = useState<number[][]>([]);
+  const [faceMsg, setFaceMsg] = useState("");
+  const faceVideoRef = useRef<HTMLVideoElement>(null);
+  const faceStreamRef = useRef<MediaStream | null>(null);
+  const faceapiRef = useRef<typeof import("@vladmandic/face-api") | null>(null);
+
+  async function startFaceCamera() {
+    setFaceMsg("");
+    setFaceCapCount(0);
+    setFaceCaptured([]);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+      faceStreamRef.current = stream;
+      if (faceVideoRef.current) {
+        faceVideoRef.current.srcObject = stream;
+        await faceVideoRef.current.play();
+      }
+      setFacePhase("camera");
+    } catch {
+      setFaceMsg("Không thể mở camera. Kiểm tra quyền truy cập.");
+    }
+  }
+
+  function stopFaceCamera() {
+    faceStreamRef.current?.getTracks().forEach(t => t.stop());
+    faceStreamRef.current = null;
+    setFacePhase("idle");
+    setFaceMsg("");
+  }
+
+  async function startCapture() {
+    setFacePhase("capturing");
+    setFaceMsg("Nhìn thẳng vào camera...");
+    const MODEL_URL = `${window.location.origin}/models`;
+
+    const fa = faceapiRef.current ?? await (async () => {
+      const m = await import("@vladmandic/face-api");
+      faceapiRef.current = m;
+      return m;
+    })();
+
+    // Buộc TF.js dùng CPU backend — tránh WebGL/WASM issues trên iOS Safari
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (fa as any).tf.setBackend("cpu");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (fa as any).tf.ready();
+
+    if (!fa.nets.tinyFaceDetector.isLoaded) {
+      setFaceMsg("Đang tải model nhận dạng...");
+      await Promise.all([
+        fa.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+        fa.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
+        fa.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+      ]);
+    }
+
+    const descriptors: number[][] = [];
+    for (let i = 0; i < 3; i++) {
+      setFaceMsg(`Đang chụp mẫu ${i + 1}/3...`);
+      await new Promise(r => setTimeout(r, 1200));
+      if (!faceVideoRef.current) break;
+      const det = await fa
+        .detectSingleFace(faceVideoRef.current, new fa.TinyFaceDetectorOptions())
+        .withFaceLandmarks(true)
+        .withFaceDescriptor();
+      if (det) {
+        descriptors.push(Array.from(det.descriptor));
+        setFaceCapCount(i + 1);
+      } else {
+        setFaceMsg(`Không phát hiện khuôn mặt lần ${i + 1}. Thử lại.`);
+        setFacePhase("camera");
+        return;
+      }
+    }
+
+    if (descriptors.length === 3) {
+      setFaceCaptured(descriptors);
+      setFacePhase("captured");
+      setFaceMsg("Đã chụp xong 3 mẫu. Nhấn Lưu để đăng ký.");
+    }
+  }
+
+  async function saveFace() {
+    if (faceCaptured.length === 0) return;
+    setFacePhase("saving");
+    setFaceMsg("Đang lưu...");
+    // Lấy trung bình 3 descriptors để tăng độ chính xác
+    const avg = Array.from({ length: 128 }, (_, i) =>
+      faceCaptured.reduce((s, d) => s + d[i], 0) / faceCaptured.length
+    );
+    try {
+      const res = await fetch(`${BASE}/hr/employees/${id}/face-descriptor`, {
+        method: "PATCH",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ descriptor: avg }),
+      });
+      const json = await res.json();
+      if (json.statusCode === 200) {
+        setFacePhase("done");
+        setFaceMsg("Đã đăng ký khuôn mặt thành công!");
+        showToast("Đã đăng ký khuôn mặt");
+        stopFaceCamera();
+        await loadEmployee();
+      } else {
+        setFaceMsg(json.message ?? "Lưu thất bại");
+        setFacePhase("captured");
+      }
+    } catch {
+      setFaceMsg("Không kết nối được máy chủ");
+      setFacePhase("captured");
+    }
+  }
+
+  // Dọn camera khi rời tab "face"
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (tab !== "face") stopFaceCamera(); }, [tab]);
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(""), 3000); }
 
@@ -226,7 +348,7 @@ function EmployeeDetailContent() {
 
       {/* Tabs */}
       <div className="flex gap-1 mb-5 border-b border-hairline">
-        {([["info", "👤 Thông tin"], ["shifts", "📅 Phân ca"]] as [Tab, string][]).map(([key, label]) => (
+        {([["info", "👤 Thông tin"], ["shifts", "📅 Phân ca"], ["face", "📷 Khuôn mặt"]] as [Tab, string][]).map(([key, label]) => (
           <button key={key}
             onPointerDown={e => { if (e.pointerType === "touch") { e.preventDefault(); setTab(key); } }}
             onClick={() => setTab(key)}
@@ -479,6 +601,140 @@ function EmployeeDetailContent() {
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* ── TAB: KHUÔN MẶT ── */}
+      {tab === "face" && (
+        <div className="max-w-md space-y-4">
+          {/* Trạng thái hiện tại */}
+          <div className={`rounded-2xl border px-5 py-4 flex items-center gap-3 ${employee.hasFace ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"}`}>
+            <span className="text-2xl">{employee.hasFace ? "✅" : "⚠️"}</span>
+            <div>
+              <p className={`text-sm font-bold ${employee.hasFace ? "text-green-700" : "text-amber-700"}`}>
+                {employee.hasFace ? "Đã đăng ký khuôn mặt" : "Chưa đăng ký khuôn mặt"}
+              </p>
+              <p className="text-xs text-muted mt-0.5">
+                {employee.hasFace
+                  ? "Nhân viên có thể chấm công bằng khuôn mặt tại kiosk."
+                  : "Cần đăng ký khuôn mặt để dùng tính năng chấm công kiosk."}
+              </p>
+            </div>
+          </div>
+
+          {/* Card đăng ký */}
+          <div className="bg-white rounded-2xl border border-hairline p-5 space-y-4">
+            <h2 className="text-sm font-bold text-ink">
+              {employee.hasFace ? "Đăng ký lại khuôn mặt" : "Đăng ký khuôn mặt"}
+            </h2>
+
+            {/* Camera preview */}
+            <div className="relative bg-gray-900 rounded-2xl overflow-hidden" style={{ aspectRatio: "4/3" }}>
+              <video
+                ref={faceVideoRef}
+                autoPlay
+                muted
+                playsInline
+                className="w-full h-full object-cover"
+                style={{ transform: "scaleX(-1)", display: facePhase === "idle" || facePhase === "done" ? "none" : "block" }}
+              />
+              {(facePhase === "idle" || facePhase === "done") && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-white/50">
+                  <span className="text-5xl mb-2">📷</span>
+                  <p className="text-sm">Camera chưa mở</p>
+                </div>
+              )}
+              {/* Khung nhận diện */}
+              {(facePhase === "camera" || facePhase === "capturing") && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="border-2 border-dashed border-green-400/70 rounded-full"
+                    style={{ width: "55%", aspectRatio: "1" }} />
+                </div>
+              )}
+              {/* Tiến độ chụp */}
+              {facePhase === "capturing" && (
+                <div className="absolute bottom-3 inset-x-3 bg-black/60 rounded-xl px-3 py-2 flex items-center gap-3">
+                  <div className="flex gap-1.5">
+                    {[0, 1, 2].map(i => (
+                      <div key={i} className={`w-3 h-3 rounded-full ${i < faceCapCount ? "bg-green-400" : "bg-white/30"}`} />
+                    ))}
+                  </div>
+                  <p className="text-white text-xs">{faceMsg}</p>
+                </div>
+              )}
+              {/* Kết quả captured */}
+              {facePhase === "captured" && (
+                <div className="absolute inset-0 bg-green-900/70 flex flex-col items-center justify-center text-white text-center p-4">
+                  <span className="text-4xl mb-2">✅</span>
+                  <p className="text-sm font-semibold">{faceMsg}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Hướng dẫn */}
+            {facePhase === "camera" && (
+              <p className="text-xs text-muted text-center">Đặt khuôn mặt vào vòng tròn, đảm bảo đủ ánh sáng</p>
+            )}
+
+            {/* Thông báo lỗi/info */}
+            {faceMsg && facePhase !== "capturing" && facePhase !== "captured" && (
+              <p className={`text-sm text-center ${faceMsg.includes("thành công") ? "text-green-600" : "text-red-500"}`}>
+                {faceMsg}
+              </p>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex gap-3">
+              {facePhase === "idle" || facePhase === "done" ? (
+                <button
+                  onClick={startFaceCamera}
+                  className="flex-1 py-3 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary-dark touch-manipulation"
+                  style={{ WebkitTapHighlightColor: "transparent" }}>
+                  {employee.hasFace ? "Đăng ký lại" : "Bắt đầu đăng ký"}
+                </button>
+              ) : facePhase === "camera" ? (
+                <>
+                  <button
+                    onClick={startCapture}
+                    className="flex-1 py-3 bg-green-600 text-white text-sm font-bold rounded-xl hover:bg-green-700 touch-manipulation"
+                    style={{ WebkitTapHighlightColor: "transparent" }}>
+                    Chụp mẫu (3 lần tự động)
+                  </button>
+                  <button
+                    onClick={stopFaceCamera}
+                    className="px-4 py-3 bg-surface-card text-gray-600 text-sm font-semibold rounded-xl hover:bg-hairline touch-manipulation"
+                    style={{ WebkitTapHighlightColor: "transparent" }}>
+                    Hủy
+                  </button>
+                </>
+              ) : facePhase === "captured" ? (
+                <>
+                  <button
+                    onClick={saveFace}
+                    disabled={faceCaptured.length === 0}
+                    className="flex-1 py-3 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary-dark disabled:opacity-60 touch-manipulation"
+                    style={{ WebkitTapHighlightColor: "transparent" }}>
+                    Lưu khuôn mặt
+                  </button>
+                  <button
+                    onClick={() => { setFaceCapCount(0); setFaceCaptured([]); setFacePhase("camera"); setFaceMsg(""); }}
+                    className="px-4 py-3 bg-surface-card text-gray-600 text-sm font-semibold rounded-xl hover:bg-hairline touch-manipulation"
+                    style={{ WebkitTapHighlightColor: "transparent" }}>
+                    Chụp lại
+                  </button>
+                </>
+              ) : facePhase === "saving" ? (
+                <div className="flex-1 py-3 bg-gray-100 text-gray-500 text-sm text-center rounded-xl">Đang lưu...</div>
+              ) : null}
+            </div>
+
+            {/* Hướng đến kiosk */}
+            {(facePhase === "done" || (employee.hasFace && facePhase === "idle")) && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-xs text-blue-700">
+                <strong>Kiosk chấm công:</strong> Truy cập <code className="bg-blue-100 px-1 rounded">/cham-cong</code> trên máy tại cửa hàng để nhân viên chấm công bằng khuôn mặt.
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

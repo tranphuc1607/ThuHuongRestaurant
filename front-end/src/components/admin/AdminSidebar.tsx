@@ -134,6 +134,18 @@ const NAV: { group: string; items: NavItem[] }[] = [
           </svg>
         ),
       },
+      {
+        href: "/admin/cham-cong", label: "Chấm công",
+        icon: (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <circle cx="12" cy="8" r="3.5" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            <path strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+              d="M4.5 20.5C4.5 17.186 7.686 14.5 12 14.5s7.5 2.686 7.5 6" />
+            <path strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+              d="M16 5l1.5 1.5L21 3" />
+          </svg>
+        ),
+      },
     ],
   },
 ];

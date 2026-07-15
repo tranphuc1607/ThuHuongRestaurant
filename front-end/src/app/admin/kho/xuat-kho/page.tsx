@@ -4,6 +4,70 @@ import Link from "next/link";
 import { getAuthHeaders } from "@/lib/auth";
 import { extractApiError, formatDate } from "@/lib/utils";
 
+type TimeFilter = "" | "today" | "week" | "month";
+function vnToday(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }).format(new Date());
+}
+function vnDayStart(dateStr: string): Date {
+  return new Date(dateStr + "T00:00:00+07:00");
+}
+function getDateRange(filter: TimeFilter, offset: number): { from?: string; to?: string } {
+  if (!filter) return {};
+  const vnDate = vnToday();
+  if (filter === "today") {
+    const [y, m, d] = vnDate.split("-").map(Number);
+    const base = new Date(Date.UTC(y, m - 1, d + offset));
+    const baseStr = `${base.getUTCFullYear()}-${String(base.getUTCMonth() + 1).padStart(2, "0")}-${String(base.getUTCDate()).padStart(2, "0")}`;
+    const start = vnDayStart(baseStr);
+    return { from: start.toISOString(), to: new Date(start.getTime() + 86400000).toISOString() };
+  }
+  if (filter === "week") {
+    const [vy, vm, vd] = vnDate.split("-").map(Number);
+    const jsDay = new Date(Date.UTC(vy, vm - 1, vd)).getUTCDay();
+    const dow = jsDay === 0 ? 6 : jsDay - 1;
+    const monday = new Date(vnDayStart(vnDate).getTime() + (offset * 7 - dow) * 86400000);
+    return { from: monday.toISOString(), to: new Date(monday.getTime() + 7 * 86400000).toISOString() };
+  }
+  if (filter === "month") {
+    const [y, m] = vnDate.split("-").map(Number);
+    let tm = m + offset, ty = y;
+    while (tm <= 0) { tm += 12; ty--; }
+    while (tm > 12) { tm -= 12; ty++; }
+    const nm = tm === 12 ? 1 : tm + 1, ny = tm === 12 ? ty + 1 : ty;
+    const start = vnDayStart(`${ty}-${String(tm).padStart(2, "0")}-01`);
+    return { from: start.toISOString(), to: vnDayStart(`${ny}-${String(nm).padStart(2, "0")}-01`).toISOString() };
+  }
+  return {};
+}
+function getNavLabel(filter: TimeFilter, offset: number): string {
+  if (!filter) return "";
+  const vnDate = vnToday();
+  const fmt = (d: Date) => d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", timeZone: "Asia/Ho_Chi_Minh" });
+  if (filter === "today") {
+    const [y, m, d] = vnDate.split("-").map(Number);
+    const ds = fmt(new Date(Date.UTC(y, m - 1, d + offset)));
+    return offset === 0 ? `Hôm nay · ${ds}` : offset === -1 ? `Hôm qua · ${ds}` : ds;
+  }
+  if (filter === "week") {
+    const [vy, vm, vd] = vnDate.split("-").map(Number);
+    const jsDay = new Date(Date.UTC(vy, vm - 1, vd)).getUTCDay();
+    const dow = jsDay === 0 ? 6 : jsDay - 1;
+    const monday = new Date(vnDayStart(vnDate).getTime() + (offset * 7 - dow) * 86400000);
+    const sunday = new Date(monday.getTime() + 6 * 86400000);
+    const range = `${fmt(monday)} – ${fmt(sunday)}`;
+    return offset === 0 ? `Tuần này · ${range}` : offset === -1 ? `Tuần trước · ${range}` : range;
+  }
+  if (filter === "month") {
+    const [y, m] = vnDate.split("-").map(Number);
+    let tm = m + offset, ty = y;
+    while (tm <= 0) { tm += 12; ty--; }
+    while (tm > 12) { tm -= 12; ty++; }
+    const ms = `T${tm}/${ty}`;
+    return offset === 0 ? `Tháng này · ${ms}` : offset === -1 ? `Tháng trước · ${ms}` : ms;
+  }
+  return "";
+}
+
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api/v1";
 
 interface Ingredient {
@@ -66,6 +130,8 @@ export default function XuatKhoPage() {
   const [histTotalPages, setHistTotalPages] = useState(0);
   const [filterIngredient, setFilterIngredient] = useState("");
   const [filterReason, setFilterReason] = useState("");
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>("");
+  const [navOffset, setNavOffset] = useState(0);
   const [deleteLoading, setDeleteLoading] = useState<number | null>(null);
 
   useEffect(() => {
@@ -83,6 +149,9 @@ export default function XuatKhoPage() {
       const params = new URLSearchParams({ page: String(histPage), size: "20" });
       if (filterIngredient) params.set("ingredientId", filterIngredient);
       if (filterReason) params.set("reason", filterReason);
+      const range = getDateRange(timeFilter, navOffset);
+      if (range.from) params.set("from", range.from);
+      if (range.to)   params.set("to",   range.to);
       const res = await fetch(`${BASE}/inventory/deductions?${params}`, { headers: getAuthHeaders() });
       const json = await res.json();
       if (json.statusCode === 200) {
@@ -90,7 +159,7 @@ export default function XuatKhoPage() {
         setHistTotalPages(json.data?.totalPages ?? 0);
       }
     } finally { setHistLoading(false); }
-  }, [histPage, filterIngredient, filterReason]);
+  }, [histPage, filterIngredient, filterReason, timeFilter, navOffset]);
 
   useEffect(() => {
     if (tab === "history") loadHistory();
@@ -345,23 +414,61 @@ export default function XuatKhoPage() {
       {/* Tab: Lịch sử */}
       {tab === "history" && (
         <div>
-          <div className="flex gap-3 mb-4 flex-wrap">
-            <select value={filterIngredient}
-              onChange={(e) => { setFilterIngredient(e.target.value); setHistPage(0); }}
-              className="border border-hairline px-3 py-1.5 text-sm outline-none focus:border-primary rounded">
-              <option value="">Tất cả nguyên liệu</option>
-              {ingredients.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
-            </select>
-            <select value={filterReason}
-              onChange={(e) => { setFilterReason(e.target.value); setHistPage(0); }}
-              className="border border-hairline px-3 py-1.5 text-sm outline-none focus:border-primary rounded">
-              <option value="">Tất cả lý do</option>
-              {Object.entries(REASON_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select>
-            <button onClick={loadHistory}
-              className="px-3 py-1.5 bg-canvas text-sm rounded hover:bg-surface-card">
-              Làm mới
-            </button>
+          <div className="mb-4 space-y-2">
+            <div className="flex gap-3 flex-wrap items-center">
+              <select value={filterIngredient}
+                onChange={(e) => { setFilterIngredient(e.target.value); setHistPage(0); }}
+                className="border border-hairline px-3 py-1.5 text-sm outline-none focus:border-primary rounded bg-white">
+                <option value="">Tất cả nguyên liệu</option>
+                {ingredients.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+              </select>
+              <select value={filterReason}
+                onChange={(e) => { setFilterReason(e.target.value); setHistPage(0); }}
+                className="border border-hairline px-3 py-1.5 text-sm outline-none focus:border-primary rounded bg-white">
+                <option value="">Tất cả lý do</option>
+                {Object.entries(REASON_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+              <button onClick={() => { setFilterIngredient(""); setFilterReason(""); setTimeFilter(""); setNavOffset(0); setHistPage(0); }}
+                className="px-3 py-1.5 text-xs text-muted hover:text-ink border border-hairline rounded">
+                Xóa lọc
+              </button>
+              <button onClick={loadHistory} className="px-3 py-1.5 bg-canvas text-sm rounded hover:bg-surface-card">↻ Làm mới</button>
+            </div>
+            <div className="flex gap-1.5 flex-wrap">
+              {(["", "today", "week", "month"] as TimeFilter[]).map((f) => {
+                const labels = { "": "Tất cả ngày", today: "Hôm nay", week: "Tuần này", month: "Tháng này" };
+                return (
+                  <button key={f} onClick={() => { setTimeFilter(f); setNavOffset(0); setHistPage(0); }}
+                    className={`px-2.5 py-1 text-xs font-semibold rounded-full border transition-colors touch-manipulation ${
+                      timeFilter === f ? "bg-primary text-white border-primary" : "bg-canvas text-gray-600 border-hairline hover:border-primary"
+                    }`}>
+                    {labels[f]}
+                  </button>
+                );
+              })}
+            </div>
+            {timeFilter && (
+              <div className="flex items-center justify-center gap-1.5">
+                <button onClick={() => { setNavOffset(o => o - 1); setHistPage(0); }}
+                  className="w-9 h-9 flex items-center justify-center rounded-full border border-hairline bg-canvas text-gray-600 hover:bg-surface-soft text-2xl leading-none touch-manipulation">
+                  ‹
+                </button>
+                <span className="text-xs font-medium text-gray-700 text-center min-w-[150px]">
+                  {getNavLabel(timeFilter, navOffset)}
+                </span>
+                <button onClick={() => { setNavOffset(o => Math.min(0, o + 1)); setHistPage(0); }}
+                  disabled={navOffset >= 0}
+                  className="w-9 h-9 flex items-center justify-center rounded-full border border-hairline bg-canvas text-gray-600 hover:bg-surface-soft disabled:opacity-30 text-2xl leading-none touch-manipulation">
+                  ›
+                </button>
+                {navOffset < 0 && (
+                  <button onClick={() => { setNavOffset(0); setHistPage(0); }}
+                    className="text-[11px] text-primary border border-primary/30 px-2 py-0.5 rounded-full hover:bg-primary/5 touch-manipulation flex-shrink-0">
+                    Về {timeFilter === "today" ? "hôm nay" : timeFilter === "week" ? "tuần này" : "tháng này"}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="bg-canvas rounded-lg border border-hairline overflow-hidden">

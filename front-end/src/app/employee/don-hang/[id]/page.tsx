@@ -121,6 +121,7 @@ export default function EmployeeOrderDetailPage() {
   const searchRef = useRef<HTMLInputElement>(null);
 
   const [payments, setPayments] = useState<PaymentInfo[]>([]);
+  const [partialAmount, setPartialAmount] = useState("");
   const [payLoading, setPayLoading] = useState(false);
   const [refundLoading, setRefundLoading] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
@@ -140,6 +141,7 @@ export default function EmployeeOrderDetailPage() {
   // UI toggles — ẩn/hiện QR và payment panel
   const [showQR, setShowQR] = useState(false);
   const [qrZoom, setQrZoom] = useState(false);
+  const [paymentQrZoom, setPaymentQrZoom] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
   const [showBeerList, setShowBeerList] = useState(false);
 
@@ -190,6 +192,15 @@ export default function EmployeeOrderDetailPage() {
   useEffect(() => { load(); }, [load]);
   useEffect(() => { setOrigin(process.env.NEXT_PUBLIC_APP_URL || window.location.origin); }, []);
 
+  // Auto-poll mỗi 4 giây khi có BANK_TRANSFER PENDING — chờ Sepay webhook tự xác nhận
+  const pendingBtPaymentId = payments.find(p => p.paymentMethod === "BANK_TRANSFER" && p.status === "PENDING")?.id ?? null;
+  useEffect(() => {
+    if (!pendingBtPaymentId) return;
+    const interval = setInterval(load, 4000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingBtPaymentId]);
+
   useEffect(() => {
     if (products.length === 0) {
       setProductsLoading(true);
@@ -204,6 +215,22 @@ export default function EmployeeOrderDetailPage() {
         .finally(() => setProductsLoading(false));
     }
   }, [products.length]);
+
+  // Tự động cập nhật giá payment khi order.totalAmount thay đổi (debounce 700ms)
+  // Chỉ auto-sync khi chưa có payment nào đã hoàn thành (tránh xung đột split payment)
+  useEffect(() => {
+    if (!order || order.status !== "OPEN") return;
+    const billing = payments.find(p => p.paymentMethod !== "REFUND" && p.status === "PENDING") ?? null;
+    if (!billing) return;
+    const hasCompleted = payments.some(p => p.paymentMethod !== "REFUND" && p.status === "COMPLETED");
+    if (hasCompleted) return; // Split payment đang diễn ra — không auto-sync
+    const prepaid = order.prepaidAmount ?? 0;
+    const newAmount = Math.max(0, order.totalAmount - prepaid);
+    if (Math.abs(newAmount - billing.amount) <= 0.5) return;
+    const timer = setTimeout(() => syncPaymentAmountFn(billing.id, newAmount), 700);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order?.totalAmount]);
 
   function formatHM(iso?: string) {
     if (!iso) return "—";
@@ -313,13 +340,20 @@ export default function EmployeeOrderDetailPage() {
     if (!order) return;
     setPayLoading(true);
     try {
+      const rawAmt = partialAmount.replace(/\./g, "").replace(",", ".");
+      const partial = rawAmt ? parseFloat(rawAmt) : undefined;
       const res = await fetch(`${BASE}/payments`, {
         method: "POST",
         headers: getAuthHeaders(),
-        body: JSON.stringify({ orderId: order.id, paymentMethod: method }),
+        body: JSON.stringify({
+          orderId: order.id,
+          paymentMethod: method,
+          amount: partial && partial > 0 ? partial : undefined,
+        }),
       });
       const json = await res.json();
       if (json.statusCode === 200) {
+        setPartialAmount("");
         load();
         showToast(method === "CASH" ? "Đã tạo phiếu tiền mặt" : "Đã tạo QR chuyển khoản");
       } else {
@@ -333,10 +367,10 @@ export default function EmployeeOrderDetailPage() {
   }
 
   async function switchMethod(newMethod: "CASH" | "BANK_TRANSFER") {
-    if (!billingPayment) return;
+    if (!pendingPayment) return;
     setPayLoading(true);
     try {
-      const res = await fetch(`${BASE}/payments/${billingPayment.id}/change-method`, {
+      const res = await fetch(`${BASE}/payments/${pendingPayment.id}/change-method`, {
         method: "PATCH",
         headers: getAuthHeaders(),
         body: JSON.stringify({ newMethod }),
@@ -355,24 +389,48 @@ export default function EmployeeOrderDetailPage() {
     }
   }
 
+  async function syncPaymentAmountFn(paymentId: number, newAmount: number) {
+    try {
+      const res = await fetch(`${BASE}/payments/${paymentId}/amount`, {
+        method: "PATCH",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ newAmount }),
+      });
+      const json = await res.json();
+      if (json.statusCode === 200) {
+        setPayments(prev => prev.map(p => p.id === paymentId ? { ...p, ...json.data } : p));
+      }
+    } catch {}
+  }
+
   async function confirmCash() {
-    if (!billingPayment) return;
+    if (!pendingPayment) return;
     setPayLoading(true);
     try {
-      const res = await fetch(`${BASE}/payments/${billingPayment.id}/confirm`, {
+      const res = await fetch(`${BASE}/payments/${pendingPayment.id}/confirm`, {
         method: "PATCH",
         headers: getAuthHeaders(),
       });
       const json = await res.json();
       if (json.statusCode === 200) {
         showToast("Đã xác nhận thanh toán tiền mặt ✓");
-        setTimeout(() => router.push("/employee/don-hang?status=PAID"), 1200);
+        // Kiểm tra nếu đơn đã PAID (đủ tiền) thì chuyển trang, nếu chưa thì reload để thêm phương thức khác
+        setTimeout(async () => {
+          const r = await fetch(`${BASE}/orders/${id}`, { headers: getAuthHeaders() });
+          const j = await r.json();
+          if (j.data?.status === "PAID") {
+            router.push("/employee/don-hang?status=PAID");
+          } else {
+            setPayLoading(false); // reset trước load để buttons không bị disabled
+            load();
+          }
+        }, 500);
       } else {
         showToast(extractApiError(json, "Xác nhận thất bại"), false);
+        setPayLoading(false);
       }
     } catch {
       showToast("Không kết nối được máy chủ", false);
-    } finally {
       setPayLoading(false);
     }
   }
@@ -513,9 +571,16 @@ export default function EmployeeOrderDetailPage() {
   const prepaid = order.prepaidAmount ?? 0;
   const remaining = Math.max(0, order.totalAmount - prepaid);
   const netRefund = Math.round(prepaid - order.totalAmount); // positive = cần hoàn cho khách (round tránh float)
-  const billingPayment = payments.find(p => p.paymentMethod !== "REFUND") ?? null;
+  // Split payment support
+  const billingPayments = payments.filter(p => p.paymentMethod !== "REFUND");
+  const completedPayments = billingPayments.filter(p => p.status === "COMPLETED");
+  const pendingPayment = billingPayments.find(p => p.status === "PENDING") ?? null;
+  const sumCompleted = completedPayments.reduce((s, p) => s + p.amount, 0);
+  const trueRemaining = Math.max(0, order.totalAmount - prepaid - sumCompleted);
+  // Legacy compat for refund logic
+  const billingPayment = pendingPayment ?? completedPayments[0] ?? null;
   const refundPayment  = payments.find(p => p.paymentMethod === "REFUND")  ?? null;
-  const hasPendingPayment = billingPayment?.status === "PENDING";
+  const hasPendingPayment = !!pendingPayment;
 
   const filteredProducts = products.filter(p => {
     const matchCat = activeCategory === "ALL" || p.category === activeCategory;
@@ -959,10 +1024,12 @@ export default function EmployeeOrderDetailPage() {
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-soft">Thanh toán</span>
               {netRefund > 0 ? (
                 <span className="text-sm font-bold text-amber-700">{formatPrice(netRefund)} hoàn khách</span>
-              ) : remaining > 0 ? (
-                <span className="text-sm font-bold text-primary">Thu {formatPrice(remaining)}</span>
+              ) : trueRemaining > 0 ? (
+                <span className="text-sm font-bold text-primary">
+                  {completedPayments.length > 0 ? `Còn ${formatPrice(trueRemaining)}` : `Thu ${formatPrice(trueRemaining)}`}
+                </span>
               ) : (
-                <span className="text-sm font-bold text-green-600">✓ Đã xong</span>
+                <span className="text-sm font-bold text-green-600">✓ Đã đủ tiền</span>
               )}
             </div>
             <span className="text-sm text-muted-soft select-none leading-none">{showPayment ? "▼" : "▲"}</span>
@@ -989,6 +1056,12 @@ export default function EmployeeOrderDetailPage() {
                   <span>− {formatPrice(prepaid)}</span>
                 </div>
               )}
+              {completedPayments.length > 0 && (
+                <div className="flex justify-between text-sm text-green-600">
+                  <span>Đã thu</span>
+                  <span>− {formatPrice(sumCompleted)}</span>
+                </div>
+              )}
               {netRefund > 0 ? (
                 refundPayment ? (
                   <div className="flex justify-between font-bold text-base border-t border-hairline pt-1.5 text-green-700">
@@ -1003,11 +1076,27 @@ export default function EmployeeOrderDetailPage() {
                 )
               ) : (
                 <div className="flex justify-between font-bold text-base border-t border-hairline pt-1.5">
-                  <span className="text-ink">Cần thu</span>
-                  <span className="text-primary">{formatPrice(remaining)}</span>
+                  <span className="text-ink">{trueRemaining > 0 ? "Còn lại" : "✓ Đủ tiền"}</span>
+                  <span className={trueRemaining > 0 ? "text-primary" : "text-green-600"}>
+                    {trueRemaining > 0 ? formatPrice(trueRemaining) : formatPrice(order.totalAmount - prepaid)}
+                  </span>
                 </div>
               )}
             </div>
+
+            {/* Danh sách các lần thanh toán đã hoàn thành (khi split) */}
+            {completedPayments.length > 0 && (
+              <div className="space-y-1">
+                {completedPayments.map(p => (
+                  <div key={p.id} className="flex items-center justify-between text-xs bg-green-50 rounded-lg px-2.5 py-1.5">
+                    <span className="text-green-700 font-semibold">
+                      {p.paymentMethod === "CASH" ? "💵 Tiền mặt" : "📱 Chuyển khoản"}
+                    </span>
+                    <span className="text-green-700 font-bold tabular-nums">✓ {formatPrice(p.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {isOpen && (
               <>
@@ -1032,12 +1121,38 @@ export default function EmployeeOrderDetailPage() {
                   </div>
                 )}
 
-                {/* Chưa có billing payment — hiện 2 nút chọn phương thức (khi cần thu thêm) */}
-                {!billingPayment && remaining > 0 && (
+                {/* Chưa có payment PENDING — hiện nút thêm phương thức (khi còn tiền) */}
+                {!pendingPayment && trueRemaining > 0 && netRefund <= 0 && (
                   <div className={`space-y-1.5 transition-opacity ${order.totalAmount > 0 ? "" : "opacity-40 pointer-events-none"}`}>
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-soft text-center">
-                      Chọn phương thức thu tiền
+                    {completedPayments.length > 0 && (
+                      <p className="text-[10px] font-semibold text-center text-muted-soft">
+                        + Thêm phương thức thu {formatPrice(trueRemaining)} còn lại
+                      </p>
+                    )}
+                    {/* Nhập số tiền một phần (optional) */}
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        value={partialAmount}
+                        onChange={e => setPartialAmount(e.target.value)}
+                        placeholder={`Mặc định: ${formatPrice(trueRemaining)}`}
+                        className="flex-1 border border-hairline rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-primary bg-white tabular-nums"
+                        min="1"
+                        step="1000"
+                      />
+                      {partialAmount && (
+                        <button onClick={() => setPartialAmount("")}
+                          className="text-muted-soft hover:text-gray-600 text-xs px-1.5">✕</button>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-muted-soft text-center -mt-0.5">
+                      Để trống = thu toàn bộ {formatPrice(trueRemaining)} còn lại
                     </p>
+                    {!completedPayments.length && (
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-soft text-center">
+                        Chọn phương thức thu tiền
+                      </p>
+                    )}
                     <div className="grid grid-cols-2 gap-1.5">
                       <button
                         onClick={() => createPayment("CASH")}
@@ -1057,25 +1172,25 @@ export default function EmployeeOrderDetailPage() {
                   </div>
                 )}
 
-                {/* Đã có billing payment PENDING */}
-                {billingPayment && billingPayment.status === "PENDING" && (
+                {/* Đã có payment PENDING — hiện UI xác nhận */}
+                {pendingPayment && (
                   <div className="space-y-2">
                     <div className="grid grid-cols-2 gap-1 p-1 bg-surface-soft rounded-xl">
                       <button
-                        onClick={() => billingPayment.paymentMethod !== "CASH" && switchMethod("CASH")}
+                        onClick={() => pendingPayment.paymentMethod !== "CASH" && switchMethod("CASH")}
                         disabled={payLoading}
                         className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all ${
-                          billingPayment.paymentMethod === "CASH"
+                          pendingPayment.paymentMethod === "CASH"
                             ? "bg-canvas shadow text-green-700 border border-green-200"
                             : "text-muted hover:text-ink"
                         }`}>
                         💵 Tiền mặt
                       </button>
                       <button
-                        onClick={() => billingPayment.paymentMethod !== "BANK_TRANSFER" && switchMethod("BANK_TRANSFER")}
+                        onClick={() => pendingPayment.paymentMethod !== "BANK_TRANSFER" && switchMethod("BANK_TRANSFER")}
                         disabled={payLoading}
                         className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all ${
-                          billingPayment.paymentMethod === "BANK_TRANSFER"
+                          pendingPayment.paymentMethod === "BANK_TRANSFER"
                             ? "bg-canvas shadow text-blue-700 border border-blue-200"
                             : "text-muted hover:text-ink"
                         }`}>
@@ -1083,30 +1198,46 @@ export default function EmployeeOrderDetailPage() {
                       </button>
                     </div>
 
-                    {billingPayment.paymentMethod === "BANK_TRANSFER" && billingPayment.vietQrUrl && (
+                    {pendingPayment.paymentMethod === "BANK_TRANSFER" && pendingPayment.vietQrUrl && (
                       <div className="bg-blue-50 rounded-xl p-2 text-center space-y-1.5">
-                        <p className="text-[10px] text-blue-600 font-semibold uppercase tracking-wide">Quét mã chuyển khoản</p>
-                        <img src={billingPayment.vietQrUrl} alt="VietQR" className="w-32 h-32 mx-auto rounded-lg border border-blue-100" />
-                        <p className="text-xs text-blue-500">Đang chờ Sepay xác nhận...</p>
+                        <p className="text-[10px] text-blue-600 font-semibold uppercase tracking-wide">
+                          Quét mã chuyển khoản{completedPayments.length > 0 ? ` · ${formatPrice(pendingPayment.amount)}` : ""}
+                        </p>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={pendingPayment.vietQrUrl}
+                          alt="VietQR"
+                          className="w-32 h-32 mx-auto rounded-lg border border-blue-100 cursor-zoom-in active:scale-95 transition-transform touch-manipulation"
+                          onClick={() => setPaymentQrZoom(true)}
+                          onPointerDown={e => { if (e.pointerType === "touch") { e.preventDefault(); setPaymentQrZoom(true); } }}
+                        />
+                        <div className="flex items-center justify-center gap-2">
+                          <p className="text-[10px] text-blue-400">Đang tự kiểm tra mỗi 4 giây...</p>
+                          <button
+                            onClick={load}
+                            className="text-[10px] text-blue-600 font-semibold underline touch-manipulation">
+                            🔄 Kiểm tra ngay
+                          </button>
+                        </div>
                       </div>
                     )}
 
-                    {billingPayment.paymentMethod === "CASH" && (
+                    {pendingPayment.paymentMethod === "CASH" && (
                       <button
                         onClick={confirmCash}
                         disabled={payLoading}
                         className="w-full py-2.5 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl text-sm disabled:opacity-50 transition-colors">
-                        {payLoading ? "Đang xử lý..." : `✓ Xác nhận thu ${formatPrice(billingPayment.amount)}`}
+                        {payLoading ? "Đang xử lý..." : `✓ Xác nhận thu ${formatPrice(pendingPayment.amount)}`}
                       </button>
                     )}
                   </div>
                 )}
 
-                {/* Đã thanh toán xong */}
-                {billingPayment && billingPayment.status === "COMPLETED" && (
+                {/* Đã thanh toán đủ — không còn pending, không còn remaining */}
+                {!pendingPayment && trueRemaining <= 0 && netRefund <= 0 && completedPayments.length > 0 && (
                   <div className="bg-green-50 border border-green-200 rounded-xl p-2.5 text-center">
-                    <p className="text-green-700 font-bold text-sm">✓ Đã thanh toán</p>
-                    <p className="text-xs text-green-600 mt-0.5">{formatPrice(billingPayment.amount)} · {billingPayment.paymentMethod === "CASH" ? "Tiền mặt" : "Chuyển khoản"}</p>
+                    <p className="text-green-700 font-bold text-sm">✓ Đã thanh toán đủ</p>
+                    <p className="text-xs text-green-600 mt-0.5">{formatPrice(sumCompleted + prepaid)} tổng thu</p>
                   </div>
                 )}
               </>
@@ -1374,6 +1505,23 @@ export default function EmployeeOrderDetailPage() {
                   : `Thêm vào đơn · ${formatPrice(selectedProduct.price * qty)}`}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment VietQR Zoom Lightbox */}
+      {paymentQrZoom && pendingPayment?.vietQrUrl && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-6"
+          onClick={() => setPaymentQrZoom(false)}
+        >
+          <div className="relative" onClick={e => e.stopPropagation()}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={pendingPayment.vietQrUrl} alt="VietQR" className="w-72 h-72 rounded-2xl shadow-2xl" />
+            <button
+              onClick={() => setPaymentQrZoom(false)}
+              className="absolute -top-3 -right-3 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center text-gray-700 font-bold text-lg touch-manipulation"
+            >×</button>
           </div>
         </div>
       )}

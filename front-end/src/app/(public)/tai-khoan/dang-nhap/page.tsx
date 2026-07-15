@@ -1,5 +1,5 @@
 ﻿"use client";
-import { useState, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Logo from "@/components/layout/Logo";
@@ -29,6 +29,23 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showPass, setShowPass] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, []);
+
+  function startCountdown(seconds: number) {
+    if (timerRef.current) clearInterval(timerRef.current);
+    setCountdown(seconds);
+    timerRef.current = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) { clearInterval(timerRef.current!); timerRef.current = null; return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+  }
 
   function setField(key: keyof typeof form, value: string) {
     setForm((p) => ({ ...p, [key]: value }));
@@ -55,7 +72,12 @@ function LoginForm() {
       });
       const json = await res.json();
       if (!res.ok || json.statusCode !== 200) {
-        setError(extractApiError(json, "Tên đăng nhập hoặc mật khẩu không đúng"));
+        const msg = extractApiError(json, "Tên đăng nhập hoặc mật khẩu không đúng");
+        setError(msg);
+        if (json.statusCode === 429) {
+          const match = msg.match(/(\d+)\s*giây/);
+          if (match) startCountdown(parseInt(match[1], 10));
+        }
         return;
       }
       const token = json.data?.accessToken ?? json.data?.access_token ?? json.data?.token;
@@ -133,13 +155,15 @@ function LoginForm() {
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-2.5 text-center">
-            {error}
+            {countdown > 0
+              ? error.replace(/\d+\s*giây/, `${countdown} giây`)
+              : error}
           </div>
         )}
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || countdown > 0}
           className="w-full bg-primary text-white py-3 text-sm font-bold uppercase tracking-wide hover:bg-primary-dark transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
         >
           {loading && (
@@ -148,7 +172,7 @@ function LoginForm() {
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
             </svg>
           )}
-          {loading ? "Đang đăng nhập..." : "Đăng Nhập"}
+          {loading ? "Đang đăng nhập..." : countdown > 0 ? `Thử lại sau ${countdown}s` : "Đăng Nhập"}
         </button>
       </form>
 

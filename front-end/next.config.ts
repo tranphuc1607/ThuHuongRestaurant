@@ -7,6 +7,15 @@ const nextConfig: NextConfig = {
   },
   // Allow ngrok host to access HMR WebSocket in dev mode
   allowedDevOrigins: ["nonempathic-inconsolably-guadalupe.ngrok-free.dev"],
+  // Proxy /proxy-api/** → backend at localhost:8080 so iPhone (via ngrok) can reach the API
+  async rewrites() {
+    return [
+      {
+        source: "/proxy-api/:path*",
+        destination: "http://localhost:8080/api/v1/:path*",
+      },
+    ];
+  },
   async headers() {
     return [
       {

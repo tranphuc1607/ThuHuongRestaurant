@@ -6,6 +6,7 @@ import QrFloat from "@/components/layout/QrFloat";
 import TableSessionFloat from "@/components/layout/TableSessionFloat";
 import DishCartFloat from "@/components/menu/DishCartFloat";
 import CartAddedToast from "@/components/menu/CartAddedToast";
+import ScrollToTopButton from "@/components/layout/ScrollToTopButton";
 
 export default function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -19,6 +20,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
       <TableSessionFloat />
       <DishCartFloat />
       <CartAddedToast />
+      <ScrollToTopButton />
     </div>
   );
 }

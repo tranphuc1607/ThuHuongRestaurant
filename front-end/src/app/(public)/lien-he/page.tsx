@@ -210,30 +210,18 @@ export default function LienHePage() {
         </div>
       </section>
 
-      {/* Map placeholder */}
-      <div className="relative h-[320px] bg-canvas overflow-hidden">
-        <Image
-          src="https://picsum.photos/seed/map-placeholder/1920/400"
-          alt="Bản đồ"
-          fill
-          className="object-cover opacity-60"
-          sizes="100vw"
+      {/* Google Map */}
+      <div className="w-full">
+        <iframe
+          src="https://maps.google.com/maps?q=21.0680346,105.7055247&z=17&hl=vi&output=embed"
+          width="100%"
+          height="380"
+          style={{ border: 0, display: "block" }}
+          allowFullScreen
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+          title="Bản đồ Nhà hàng Thu Hương"
         />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="bg-canvas px-6 py-4 text-center shadow-lg">
-            <div className="text-primary text-2xl mb-1">📍</div>
-            <div className="font-bold text-ink text-sm">Nhà hàng Thu Hương</div>
-            <div className="text-xs text-muted mt-1">123 Đường Ẩm Thực, Quận 1, TP.HCM</div>
-            <a
-              href="https://maps.google.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-block mt-3 bg-primary text-white text-xs px-4 py-1.5 hover:bg-primary-dark transition-colors"
-            >
-              Xem trên Google Maps
-            </a>
-          </div>
-        </div>
       </div>
 
       {/* Bottom CTA */}

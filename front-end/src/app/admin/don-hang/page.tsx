@@ -14,20 +14,107 @@ const ORDER_STATUS: Record<string, { label: string; color: string }> = {
   CANCELLED: { label: "Đã hủy",  color: "bg-red-100 text-red-600" },
 };
 
+type TimeFilter = "" | "today" | "week" | "month" | "custom";
+
 interface Order {
   id: number; tableId: number; tableName?: string; status: string;
   totalAmount: number; prepaidAmount?: number; createdAt: string; createdBy?: string;
 }
 
 function fmtTime(iso: string) {
-  return new Date(iso).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleString("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+  });
 }
 
-const FILTERS = [
+// Lấy ngày hiện tại theo múi giờ VN, format YYYY-MM-DD
+function vnToday(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }).format(new Date());
+}
+
+// Đổi ngày VN (YYYY-MM-DD) sang UTC Instant bắt đầu ngày đó ở VN
+function vnDayStart(vnDate: string): Date {
+  return new Date(vnDate + "T00:00:00+07:00");
+}
+
+// Tính khoảng thời gian theo múi giờ VN (offset: 0=hiện tại, -1=trước 1 kỳ, ...)
+function getDateRange(filter: TimeFilter, offset: number, customFrom?: string, customTo?: string): { from?: string; to?: string } {
+  if (!filter || (filter === "custom" && !customFrom)) return {};
+  const vnDate = vnToday();
+
+  if (filter === "today") {
+    const [y, m, d] = vnDate.split("-").map(Number);
+    const base = new Date(Date.UTC(y, m - 1, d + offset));
+    const baseStr = `${base.getUTCFullYear()}-${String(base.getUTCMonth() + 1).padStart(2, "0")}-${String(base.getUTCDate()).padStart(2, "0")}`;
+    const start = vnDayStart(baseStr);
+    return { from: start.toISOString(), to: new Date(start.getTime() + 86400000).toISOString() };
+  }
+  if (filter === "week") {
+    const [vy, vm, vd] = vnDate.split("-").map(Number);
+    const jsDay = new Date(Date.UTC(vy, vm - 1, vd)).getUTCDay();
+    const dow = jsDay === 0 ? 6 : jsDay - 1;
+    const monday = new Date(vnDayStart(vnDate).getTime() + (offset * 7 - dow) * 86400000);
+    return { from: monday.toISOString(), to: new Date(monday.getTime() + 7 * 86400000).toISOString() };
+  }
+  if (filter === "month") {
+    const [y, m] = vnDate.split("-").map(Number);
+    let tm = m + offset, ty = y;
+    while (tm <= 0) { tm += 12; ty--; }
+    while (tm > 12) { tm -= 12; ty++; }
+    const nm = tm === 12 ? 1 : tm + 1, ny = tm === 12 ? ty + 1 : ty;
+    const start = vnDayStart(`${ty}-${String(tm).padStart(2, "0")}-01`);
+    return { from: start.toISOString(), to: vnDayStart(`${ny}-${String(nm).padStart(2, "0")}-01`).toISOString() };
+  }
+  if (filter === "custom" && customFrom) {
+    const start = vnDayStart(customFrom);
+    return { from: start.toISOString(), to: new Date(vnDayStart(customTo || customFrom).getTime() + 86400000).toISOString() };
+  }
+  return {};
+}
+
+function getNavLabel(filter: TimeFilter, offset: number): string {
+  if (!filter || filter === "custom") return "";
+  const vnDate = vnToday();
+  const fmt = (d: Date) => d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", timeZone: "Asia/Ho_Chi_Minh" });
+
+  if (filter === "today") {
+    const [y, m, d] = vnDate.split("-").map(Number);
+    const ds = fmt(new Date(Date.UTC(y, m - 1, d + offset)));
+    return offset === 0 ? `Hôm nay · ${ds}` : offset === -1 ? `Hôm qua · ${ds}` : ds;
+  }
+  if (filter === "week") {
+    const [vy, vm, vd] = vnDate.split("-").map(Number);
+    const jsDay = new Date(Date.UTC(vy, vm - 1, vd)).getUTCDay();
+    const dow = jsDay === 0 ? 6 : jsDay - 1;
+    const monday = new Date(vnDayStart(vnDate).getTime() + (offset * 7 - dow) * 86400000);
+    const sunday = new Date(monday.getTime() + 6 * 86400000);
+    const range = `${fmt(monday)} – ${fmt(sunday)}`;
+    return offset === 0 ? `Tuần này · ${range}` : offset === -1 ? `Tuần trước · ${range}` : range;
+  }
+  if (filter === "month") {
+    const [y, m] = vnDate.split("-").map(Number);
+    let tm = m + offset, ty = y;
+    while (tm <= 0) { tm += 12; ty--; }
+    while (tm > 12) { tm -= 12; ty++; }
+    const ms = `T${tm}/${ty}`;
+    return offset === 0 ? `Tháng này · ${ms}` : offset === -1 ? `Tháng trước · ${ms}` : ms;
+  }
+  return "";
+}
+
+const STATUS_FILTERS = [
   { value: "", label: "Tất cả" },
   { value: "OPEN",      label: "Đang mở" },
   { value: "PAID",      label: "Đã TT" },
   { value: "CANCELLED", label: "Đã hủy" },
+];
+
+const TIME_OPTIONS: { value: TimeFilter; label: string }[] = [
+  { value: "today", label: "Hôm nay" },
+  { value: "week",  label: "Tuần này" },
+  { value: "month", label: "Tháng này" },
+  { value: "custom", label: "Tùy chọn" },
 ];
 
 function AdminOrdersPageInner() {
@@ -39,6 +126,10 @@ function AdminOrdersPageInner() {
   const [page, setPage]                 = useState(() => Number(searchParams.get("page") ?? "0"));
   const [totalPages, setTotalPages]     = useState(0);
   const [filter, setFilter]             = useState(() => searchParams.get("status") ?? "");
+  const [timeFilter, setTimeFilter]     = useState<TimeFilter>("");
+  const [navOffset, setNavOffset]       = useState(0);
+  const [customFrom, setCustomFrom]     = useState("");
+  const [customTo, setCustomTo]         = useState("");
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [toast, setToast]               = useState("");
   const scrollRestored                  = useRef(false);
@@ -48,6 +139,9 @@ function AdminOrdersPageInner() {
     try {
       const p = new URLSearchParams({ page: String(page), size: "20" });
       if (filter) p.set("status", filter);
+      const range = getDateRange(timeFilter, navOffset, customFrom, customTo);
+      if (range.from) p.set("from", range.from);
+      if (range.to)   p.set("to",   range.to);
       const res  = await fetch(`${BASE}/orders?${p}`, { headers: getAuthHeaders() });
       const json = await res.json();
       if (json.statusCode === 200) {
@@ -55,11 +149,11 @@ function AdminOrdersPageInner() {
         setTotalPages(json.data.totalPages ?? 0);
       }
     } finally { setLoading(false); }
-  }, [page, filter]);
+  }, [page, filter, timeFilter, navOffset, customFrom, customTo]);
 
   useEffect(() => { load(); }, [load]);
 
-  // Sync filter + page vào URL để browser back tự restore
+  // Sync filter + page vào URL
   useEffect(() => {
     const params = new URLSearchParams();
     if (filter) params.set("status", filter);
@@ -68,7 +162,7 @@ function AdminOrdersPageInner() {
     router.replace(`/admin/don-hang${qs ? "?" + qs : ""}`, { scroll: false });
   }, [filter, page, router]);
 
-  // Restore scroll sau khi load xong lần đầu
+  // Restore scroll
   useEffect(() => {
     if (!loading && !scrollRestored.current) {
       scrollRestored.current = true;
@@ -82,6 +176,17 @@ function AdminOrdersPageInner() {
 
   function saveScroll() { sessionStorage.setItem(SCROLL_KEY, String(window.scrollY)); }
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(""), 3000); }
+
+  const hasActiveFilter = !!(filter || timeFilter);
+
+  function clearAllFilters() {
+    setPage(0);
+    setFilter("");
+    setTimeFilter("");
+    setNavOffset(0);
+    setCustomFrom("");
+    setCustomTo("");
+  }
 
   async function cancelOrder(id: number) {
     if (!confirm("Hủy đơn hàng này?")) return;
@@ -110,16 +215,85 @@ function AdminOrdersPageInner() {
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1 -mx-3 px-3 md:mx-0 md:px-0 scrollbar-hide">
-        {FILTERS.map(({ value, label }) => (
-          <button key={value} onClick={() => { setPage(0); setFilter(value); }}
-            className={`px-2.5 py-1 text-xs font-semibold rounded-full border flex-shrink-0 transition-colors touch-manipulation ${
-              filter === value ? "bg-primary text-white border-primary" : "bg-white text-gray-600 border-gray-200"
-            }`}>
-            {label}
-          </button>
-        ))}
+      {/* ── Filters ── */}
+      <div className="space-y-2 mb-3">
+        {/* Row 1: status filter */}
+        <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-3 px-3 md:mx-0 md:px-0 scrollbar-hide">
+          {STATUS_FILTERS.map(({ value, label }) => (
+            <button key={value} onClick={() => { setPage(0); setFilter(value); }}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-full border flex-shrink-0 transition-colors touch-manipulation ${
+                filter === value ? "bg-primary text-white border-primary" : "bg-white text-gray-600 border-gray-200"
+              }`}>
+              {label}
+            </button>
+          ))}
+
+          {hasActiveFilter && (
+            <button onClick={clearAllFilters}
+              className="px-2.5 py-1 text-xs text-primary underline flex-shrink-0 touch-manipulation">
+              Xóa lọc
+            </button>
+          )}
+        </div>
+
+        {/* Row 2: time filter */}
+        <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-3 px-3 md:mx-0 md:px-0 scrollbar-hide items-center">
+          <span className="text-xs text-gray-400 font-medium flex-shrink-0">Thời gian:</span>
+          {TIME_OPTIONS.map(({ value, label }) => (
+            <button key={value}
+              onClick={() => { setPage(0); setNavOffset(0); setTimeFilter(timeFilter === value ? "" : value); }}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-full border flex-shrink-0 transition-colors touch-manipulation ${
+                timeFilter === value
+                  ? "bg-blue-500 text-white border-blue-500"
+                  : "bg-white text-gray-600 border-gray-200"
+              }`}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Navigation lùi / tiến kỳ */}
+        {timeFilter && timeFilter !== "custom" && (
+          <div className="flex items-center justify-center gap-1.5">
+            <button
+              onClick={() => { setNavOffset(o => o - 1); setPage(0); }}
+              className="w-9 h-9 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 text-2xl leading-none touch-manipulation">
+              ‹
+            </button>
+            <span className="text-xs font-medium text-gray-700 text-center min-w-[150px]">
+              {getNavLabel(timeFilter, navOffset)}
+            </span>
+            <button
+              onClick={() => { setNavOffset(o => Math.min(0, o + 1)); setPage(0); }}
+              disabled={navOffset >= 0}
+              className="w-9 h-9 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-30 text-2xl leading-none touch-manipulation">
+              ›
+            </button>
+            {navOffset < 0 && (
+              <button
+                onClick={() => { setNavOffset(0); setPage(0); }}
+                className="text-[11px] text-blue-500 border border-blue-300 px-2 py-0.5 rounded-full hover:bg-blue-50 touch-manipulation flex-shrink-0">
+                Về {timeFilter === "today" ? "hôm nay" : timeFilter === "week" ? "tuần này" : "tháng này"}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Custom date picker */}
+        {timeFilter === "custom" && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-gray-400">Từ</span>
+            <input type="date" value={customFrom}
+              onChange={e => { setCustomFrom(e.target.value); setPage(0); }}
+              className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-800 focus:outline-none focus:border-primary"
+            />
+            <span className="text-xs text-gray-400">đến</span>
+            <input type="date" value={customTo} min={customFrom}
+              onChange={e => { setCustomTo(e.target.value); setPage(0); }}
+              className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-800 focus:outline-none focus:border-primary"
+            />
+          </div>
+        )}
       </div>
 
       {loading && (
@@ -148,7 +322,6 @@ function AdminOrdersPageInner() {
                   needsRefund ? "border-amber-300 bg-amber-50/30" : "border-gray-100",
                 ].join(" ")}>
 
-                  {/* Row 1: id + status */}
                   <div className="flex items-center justify-between mb-1.5">
                     <div className="flex items-center gap-1.5">
                       {needsRefund && <span className="text-[9px] bg-amber-500 text-white px-1 py-0.5 rounded-full font-bold">💰</span>}
@@ -162,7 +335,6 @@ function AdminOrdersPageInner() {
                     </span>
                   </div>
 
-                  {/* 2-col info grid */}
                   <div className="grid grid-cols-2 gap-x-3 mb-1.5 text-xs">
                     <span className="font-semibold text-gray-800 truncate">{o.tableName ?? `Bàn ${o.tableId}`}</span>
                     <span className="text-right font-bold text-gray-900">{formatPrice(o.totalAmount)}</span>
@@ -174,7 +346,6 @@ function AdminOrdersPageInner() {
                       : <span/>}
                   </div>
 
-                  {/* Actions */}
                   <div className="flex gap-1.5 pt-2 border-t border-gray-100">
                     <Link href={`/admin/don-hang/${o.id}`} onClick={saveScroll}
                       className="flex-1 py-1.5 text-center bg-gray-100 text-gray-600 text-xs font-semibold rounded-lg touch-manipulation">

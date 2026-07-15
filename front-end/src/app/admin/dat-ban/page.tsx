@@ -6,8 +6,72 @@ import { getAuthHeaders } from "@/lib/auth";
 import { formatPrice } from "@/lib/utils";
 
 const SCROLL_KEY = "admin-dat-ban-scroll";
-
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api/v1";
+
+type TimeFilter = "" | "today" | "week" | "month";
+
+function vnToday(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }).format(new Date());
+}
+function vnDayStart(dateStr: string): Date {
+  return new Date(dateStr + "T00:00:00+07:00");
+}
+function getDateRange(filter: TimeFilter, offset: number): { from?: string; to?: string } {
+  if (!filter) return {};
+  const vnDate = vnToday();
+  if (filter === "today") {
+    const [y, m, d] = vnDate.split("-").map(Number);
+    const base = new Date(Date.UTC(y, m - 1, d + offset));
+    const baseStr = `${base.getUTCFullYear()}-${String(base.getUTCMonth() + 1).padStart(2, "0")}-${String(base.getUTCDate()).padStart(2, "0")}`;
+    const start = vnDayStart(baseStr);
+    return { from: start.toISOString(), to: new Date(start.getTime() + 86400000).toISOString() };
+  }
+  if (filter === "week") {
+    const [vy, vm, vd] = vnDate.split("-").map(Number);
+    const jsDay = new Date(Date.UTC(vy, vm - 1, vd)).getUTCDay();
+    const dow = jsDay === 0 ? 6 : jsDay - 1;
+    const monday = new Date(vnDayStart(vnDate).getTime() + (offset * 7 - dow) * 86400000);
+    return { from: monday.toISOString(), to: new Date(monday.getTime() + 7 * 86400000).toISOString() };
+  }
+  if (filter === "month") {
+    const [y, m] = vnDate.split("-").map(Number);
+    let tm = m + offset, ty = y;
+    while (tm <= 0) { tm += 12; ty--; }
+    while (tm > 12) { tm -= 12; ty++; }
+    const nm = tm === 12 ? 1 : tm + 1, ny = tm === 12 ? ty + 1 : ty;
+    const start = vnDayStart(`${ty}-${String(tm).padStart(2, "0")}-01`);
+    return { from: start.toISOString(), to: vnDayStart(`${ny}-${String(nm).padStart(2, "0")}-01`).toISOString() };
+  }
+  return {};
+}
+function getNavLabel(filter: TimeFilter, offset: number): string {
+  if (!filter) return "";
+  const vnDate = vnToday();
+  const fmt = (d: Date) => d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", timeZone: "Asia/Ho_Chi_Minh" });
+  if (filter === "today") {
+    const [y, m, d] = vnDate.split("-").map(Number);
+    const ds = fmt(new Date(Date.UTC(y, m - 1, d + offset)));
+    return offset === 0 ? `Hôm nay · ${ds}` : offset === -1 ? `Hôm qua · ${ds}` : ds;
+  }
+  if (filter === "week") {
+    const [vy, vm, vd] = vnDate.split("-").map(Number);
+    const jsDay = new Date(Date.UTC(vy, vm - 1, vd)).getUTCDay();
+    const dow = jsDay === 0 ? 6 : jsDay - 1;
+    const monday = new Date(vnDayStart(vnDate).getTime() + (offset * 7 - dow) * 86400000);
+    const sunday = new Date(monday.getTime() + 6 * 86400000);
+    const range = `${fmt(monday)} – ${fmt(sunday)}`;
+    return offset === 0 ? `Tuần này · ${range}` : offset === -1 ? `Tuần trước · ${range}` : range;
+  }
+  if (filter === "month") {
+    const [y, m] = vnDate.split("-").map(Number);
+    let tm = m + offset, ty = y;
+    while (tm <= 0) { tm += 12; ty--; }
+    while (tm > 12) { tm -= 12; ty++; }
+    const ms = `T${tm}/${ty}`;
+    return offset === 0 ? `Tháng này · ${ms}` : offset === -1 ? `Tháng trước · ${ms}` : ms;
+  }
+  return "";
+}
 
 const STATUS_CFG: Record<string, { label: string; color: string }> = {
   PENDING_PAYMENT:      { label: "Chờ thanh toán", color: "bg-yellow-100 text-yellow-700" },
@@ -37,15 +101,13 @@ function isNew(createdAt?: string) {
   return !!createdAt && Date.now() - new Date(createdAt).getTime() < 3_600_000;
 }
 function fmtShort(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Ho_Chi_Minh" });
 }
 function fmtFull(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Ho_Chi_Minh" });
 }
 
-const FILTERS = [
+const STATUS_FILTERS = [
   { value: "", label: "Tất cả" },
   { value: "PENDING_PAYMENT", label: "Chờ TT" },
   { value: "CONFIRMED",       label: "Xác nhận" },
@@ -54,24 +116,36 @@ const FILTERS = [
   { value: "CANCELLED",       label: "Đã hủy" },
 ];
 
+const TIME_FILTERS: { value: TimeFilter; label: string }[] = [
+  { value: "", label: "Tất cả ngày" },
+  { value: "today", label: "Hôm nay" },
+  { value: "week", label: "Tuần này" },
+  { value: "month", label: "Tháng này" },
+];
+
 function AdminBookingsPageInner() {
   const router       = useRouter();
   const searchParams = useSearchParams();
 
-  const [bookings, setBookings]       = useState<Booking[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [page, setPage]               = useState(() => Number(searchParams.get("page") ?? "0"));
-  const [totalPages, setTotalPages]   = useState(0);
-  const [filter, setFilter]           = useState(() => searchParams.get("status") ?? "");
+  const [bookings, setBookings]         = useState<Booking[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [page, setPage]                 = useState(() => Number(searchParams.get("page") ?? "0"));
+  const [totalPages, setTotalPages]     = useState(0);
+  const [filter, setFilter]             = useState(() => searchParams.get("status") ?? "");
+  const [timeFilter, setTimeFilter]     = useState<TimeFilter>("");
+  const [navOffset, setNavOffset]       = useState(0);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
-  const [toast, setToast]             = useState("");
-  const scrollRestored                = useRef(false);
+  const [toast, setToast]               = useState("");
+  const scrollRestored                  = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const p = new URLSearchParams({ page: String(page), size: "20" });
       if (filter) p.set("status", filter);
+      const range = getDateRange(timeFilter, navOffset);
+      if (range.from) p.set("from", range.from);
+      if (range.to)   p.set("to",   range.to);
       const res  = await fetch(`${BASE}/bookings?${p}`, { headers: getAuthHeaders() });
       const json = await res.json();
       if (json.statusCode === 200) {
@@ -79,12 +153,11 @@ function AdminBookingsPageInner() {
         setTotalPages(json.data.totalPages ?? 0);
       }
     } finally { setLoading(false); }
-  }, [page, filter]);
+  }, [page, filter, timeFilter, navOffset]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { const id = setInterval(load, 30_000); return () => clearInterval(id); }, [load]);
 
-  // Sync filter + page vào URL để browser back tự restore
   useEffect(() => {
     const params = new URLSearchParams();
     if (filter) params.set("status", filter);
@@ -93,7 +166,6 @@ function AdminBookingsPageInner() {
     router.replace(`/admin/dat-ban${qs ? "?" + qs : ""}`, { scroll: false });
   }, [filter, page, router]);
 
-  // Restore scroll sau khi load xong lần đầu
   useEffect(() => {
     if (!loading && !scrollRestored.current) {
       scrollRestored.current = true;
@@ -106,7 +178,6 @@ function AdminBookingsPageInner() {
   }, [loading]);
 
   function saveScroll() { sessionStorage.setItem(SCROLL_KEY, String(window.scrollY)); }
-
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(""), 3000); }
 
   async function doAction(id: number, endpoint: string, msg: string) {
@@ -135,9 +206,9 @@ function AdminBookingsPageInner() {
         </button>
       </div>
 
-      {/* Filters — scroll on mobile */}
-      <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1 -mx-3 px-3 md:mx-0 md:px-0 md:flex-wrap scrollbar-hide">
-        {FILTERS.map(({ value, label }) => (
+      {/* Status filter pills */}
+      <div className="flex gap-1.5 mb-2 overflow-x-auto pb-1 -mx-3 px-3 md:mx-0 md:px-0 md:flex-wrap scrollbar-hide">
+        {STATUS_FILTERS.map(({ value, label }) => (
           <button key={value} onClick={() => { setPage(0); setFilter(value); }}
             className={`px-2.5 py-1 text-xs font-semibold rounded-full border flex-shrink-0 transition-colors touch-manipulation ${
               filter === value ? "bg-primary text-white border-primary" : "bg-white text-gray-600 border-gray-200"
@@ -146,6 +217,45 @@ function AdminBookingsPageInner() {
           </button>
         ))}
       </div>
+
+      {/* Time filter pills */}
+      <div className="flex gap-1.5 mb-2 overflow-x-auto pb-1 -mx-3 px-3 md:mx-0 md:px-0 scrollbar-hide">
+        {TIME_FILTERS.map(({ value, label }) => (
+          <button key={value} onClick={() => { setTimeFilter(value); setNavOffset(0); setPage(0); }}
+            className={`px-2.5 py-1 text-xs font-semibold rounded-full border flex-shrink-0 transition-colors touch-manipulation ${
+              timeFilter === value ? "bg-indigo-500 text-white border-indigo-500" : "bg-white text-gray-600 border-gray-200"
+            }`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Navigation row */}
+      {timeFilter && (
+        <div className="flex items-center justify-center gap-1.5 mb-3">
+          <button
+            onClick={() => { setNavOffset(o => o - 1); setPage(0); }}
+            className="w-9 h-9 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 text-2xl leading-none touch-manipulation">
+            ‹
+          </button>
+          <span className="text-xs font-medium text-gray-700 text-center min-w-[150px]">
+            {getNavLabel(timeFilter, navOffset)}
+          </span>
+          <button
+            onClick={() => { setNavOffset(o => Math.min(0, o + 1)); setPage(0); }}
+            disabled={navOffset >= 0}
+            className="w-9 h-9 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-30 text-2xl leading-none touch-manipulation">
+            ›
+          </button>
+          {navOffset < 0 && (
+            <button
+              onClick={() => { setNavOffset(0); setPage(0); }}
+              className="text-[11px] text-blue-500 border border-blue-300 px-2 py-0.5 rounded-full hover:bg-blue-50 touch-manipulation flex-shrink-0">
+              Về {timeFilter === "today" ? "hôm nay" : timeFilter === "week" ? "tuần này" : "tháng này"}
+            </button>
+          )}
+        </div>
+      )}
 
       {loading && (
         <div className="flex justify-center py-10">
@@ -181,7 +291,6 @@ function AdminBookingsPageInner() {
                     : "border-gray-100",
                 ].join(" ")}>
 
-                  {/* Row 1: code + badges | status */}
                   <div className="flex items-center justify-between mb-1.5">
                     <div className="flex items-center gap-1 min-w-0">
                       {badge && <span className="text-[9px] bg-red-500 text-white px-1 py-0.5 rounded-full font-bold flex-shrink-0">MỚI</span>}
@@ -198,7 +307,6 @@ function AdminBookingsPageInner() {
                     </span>
                   </div>
 
-                  {/* 2-col info grid */}
                   <div className="grid grid-cols-2 gap-x-3 mb-2 text-xs">
                     <span className="font-semibold text-gray-800 truncate">{b.customerName}</span>
                     <span className="text-right text-gray-500">{fmtShort(b.scheduledTime)}</span>
@@ -206,14 +314,12 @@ function AdminBookingsPageInner() {
                     <span className="text-right font-bold text-gray-900">{formatPrice(b.totalAmount)}</span>
                   </div>
 
-                  {/* Payment info */}
                   <div className="text-[10px] text-gray-400 mb-2 flex items-center gap-1.5">
                     <span>{METHOD_LABELS[b.paymentMethod]}</span>
                     {needsRefund && <span className="text-amber-600 font-semibold">· Hoàn {formatPrice(refund)}</span>}
                     {!needsRefund && paid > 0 && <span className="text-green-600">· Cọc {formatPrice(paid)}</span>}
                   </div>
 
-                  {/* Actions */}
                   <div className="flex gap-1.5 pt-2 border-t border-gray-100">
                     {canConfirmBank && (
                       <button onClick={() => doAction(b.id, "confirm", "Đã xác nhận")}

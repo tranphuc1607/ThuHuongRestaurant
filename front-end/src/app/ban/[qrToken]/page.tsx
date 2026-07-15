@@ -1,5 +1,6 @@
 // Server component — no "use client"
 import Script from "next/script";
+import OrderDrawer from "./OrderDrawer";
 const BACKEND = process.env.BACKEND_API_URL ?? "http://localhost:8080/api/v1";
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
 
@@ -32,7 +33,7 @@ interface OrderData {
   id: number; tableName?: string; totalAmount: number; prepaidAmount: number;
   items: OrderItem[]; surcharges?: OrderSurcharge[];
 }
-interface Product {
+interface Product {  // chỉ dùng cho product menu (grid thực đơn)
   id: number; name: string; price: number; category: string; status: string; imageUrl?: string;
 }
 
@@ -93,14 +94,6 @@ export default async function TableQrPage({ params }: { params: Promise<{ qrToke
     getProducts(),
   ]);
 
-  const isCocBia = (it: OrderItem) =>
-    it.saleUnit === "CUP" && it.productName.toLowerCase().includes("bia");
-  const drinks = order?.items.filter(isCocBia) ?? [];
-  const foods  = order?.items.filter(it => !isCocBia(it)) ?? [];
-  const prepaid   = order?.prepaidAmount ?? 0;
-  const remaining = order ? Math.max(0, order.totalAmount - prepaid) : 0;
-  const netRefund = order ? Math.round(prepaid - order.totalAmount) : 0;
-
   const grouped: Record<string, Product[]> = {};
   for (const p of products) {
     const cat = (p.category ?? "OTHER").toUpperCase();
@@ -112,11 +105,11 @@ export default async function TableQrPage({ params }: { params: Promise<{ qrToke
     ...Object.keys(grouped).filter(c => !CAT_ORDER.includes(c) && grouped[c]?.length),
   ];
 
-  // Map tên món → product (để lấy ảnh cho order items)
-  const productByName: Record<string, Product> = {};
-  for (const p of products) productByName[p.name.trim().toLowerCase()] = p;
-
-  const snapStr = String((order?.items?.length ?? -1) + "+" + (order?.totalAmount ?? 0));
+  // Map tên → imageUrl (pass sang OrderDrawer để hiện thumbnail)
+  const productImages: Record<string, string> = {};
+  for (const p of products) {
+    if (p.imageUrl) productImages[p.name.trim().toLowerCase()] = p.imageUrl;
+  }
 
   return (
     <div style={{ minHeight: "100vh", background: "#f9fafb", fontFamily: "system-ui,-apple-system,sans-serif", paddingBottom: 90 }}>
@@ -159,39 +152,6 @@ export default async function TableQrPage({ params }: { params: Promise<{ qrToke
 })();
       `}} />
 
-      {/* ── Polling + scroll restore ── */}
-      <script dangerouslySetInnerHTML={{ __html: `
-(function(){
-  var saved=sessionStorage.getItem('qr_scroll');
-  if(saved){window.scrollTo(0,parseInt(saved,10));sessionStorage.removeItem('qr_scroll');}
-  var snap=${JSON.stringify(snapStr)};
-  function check(){
-    fetch('/api/table/${qrToken}',{cache:'no-store',headers:{'ngrok-skip-browser-warning':'1'}})
-      .then(function(r){return r.json();})
-      .then(function(j){
-        if(j.statusCode===200&&j.data){
-          var cur=String((j.data.items?j.data.items.length:-1)+'+'+String(j.data.totalAmount||0));
-          if(cur!==snap){
-            sessionStorage.setItem('qr_scroll',String(window.scrollY));
-            var dr=document.getElementById('order-drawer');
-            if(dr&&dr.style.transform==='translateX(0%)'){
-              sessionStorage.setItem('qr_drawer','1');
-              sessionStorage.setItem('qr_drawer_scroll',String(dr.scrollTop));
-            }
-            location.reload();
-          }
-        }
-      }).catch(function(){});
-  }
-  setInterval(check,3000);
-  // Ẩn ảnh vỡ để chữ cái đầu hiện ra làm fallback
-  document.addEventListener('DOMContentLoaded',function(){
-    document.querySelectorAll('[data-prod-img="1"]').forEach(function(img){
-      img.onerror=function(){this.style.display='none';};
-    });
-  });
-})();
-      `}} />
 
       {/* ── Header ── */}
       <div style={{ background: "#ea580c", color: "#fff", padding: "28px 20px 14px", textAlign: "center", position: "relative" }}>
@@ -289,224 +249,38 @@ export default async function TableQrPage({ params }: { params: Promise<{ qrToke
         </div>
       </div>
 
-      {/* ── Drawer backdrop ── */}
-      <div id="order-overlay" style={{ display: "none", position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 40 }} />
-
-      {/* ── Order drawer (slides from right) ── */}
-      <div id="order-drawer" style={{ position: "fixed", top: 0, right: 0, width: "100%", height: "100%", background: "#f9fafb", transform: "translateX(100%)", transition: "transform 0.28s cubic-bezier(0.4,0,0.2,1)", zIndex: 50, overflowY: "auto", overscrollBehavior: "contain" }}>
-        {/* Sticky header */}
-        <div style={{ position: "sticky", top: 0, background: "#fff", padding: "14px 16px", borderBottom: "1px solid #f0f0f0", display: "flex", alignItems: "center", gap: 10, zIndex: 5 }}>
-          <button id="drawer-close" style={{ width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", background: "#f3f4f6", border: "none", borderRadius: 8, fontSize: 18, cursor: "pointer", color: "#374151" }}>←</button>
-          <span style={{ fontSize: 15, fontWeight: 700, color: "#1f2937", flex: 1 }}>
-            {tableName ? `Đơn — ${tableName}` : "Đơn hàng"}
-          </span>
-          {order && (
-            <span style={{ fontSize: 12, background: "#fef9c3", color: "#a16207", padding: "2px 8px", borderRadius: 99, fontWeight: 600 }}>
-              {order.items.length} món
-            </span>
-          )}
-        </div>
-
-        {/* Drawer body */}
-        <div style={{ padding: "12px 16px 120px", maxWidth: 500, margin: "0 auto" }}>
-          {!order ? (
-            <div style={{ marginTop: 60, textAlign: "center" }}>
-              <div style={{ fontSize: 40, marginBottom: 12 }}>🍽️</div>
-              <p style={{ fontWeight: 600, color: "#374151", fontSize: 15, margin: "0 0 6px" }}>Bàn chưa có đơn hàng</p>
-              <p style={{ fontSize: 13, color: "#9ca3af", margin: 0 }}>Nhân viên sẽ mở đơn khi bạn sẵn sàng gọi món</p>
-            </div>
-          ) : (
-            <>
-              {/* Drinks */}
-              {drinks.length > 0 && (
-                <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #bfdbfe", marginTop: 8, overflow: "hidden" }}>
-                  <div style={{ padding: "10px 14px 8px", background: "#eff6ff", borderBottom: "1px solid #bfdbfe", display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontSize: 16 }}>🍺</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "#1d4ed8" }}>Đồ uống</span>
-                    <span style={{ fontSize: 11, color: "#93c5fd", marginLeft: "auto" }}>{drinks.length} loại</span>
-                  </div>
-                  <div style={{ padding: "8px 8px 0", display: "flex", flexWrap: "wrap", gap: 4 }}>
-                    {drinks.map(item => {
-                      const color = avatarColor(item.productName);
-                      return (
-                        <div key={item.id} style={{ width: "calc(10% - 4px)", minWidth: 28, background: color + "15", border: `1.5px solid ${color}60`, borderRadius: 6, padding: "3px 1px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
-                          <span style={{ fontSize: 16, fontWeight: 900, color, lineHeight: 1.1 }}>{item.quantity}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div style={{ padding: "6px 10px 8px", borderTop: "1px solid #bfdbfe", marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: 10, color: "#3b82f6", fontWeight: 600 }}>Tổng cốc bia</span>
-                    <span style={{ fontSize: 14, fontWeight: 900, color: "#1d4ed8" }}>
-                      {drinks.reduce((s, it) => s + it.quantity, 0)} cốc
-                      <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 500, margin: "0 6px" }}>·</span>
-                      {fmt(drinks.reduce((s, it) => s + it.itemTotal, 0))}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* Food table */}
-              {foods.length > 0 && (
-                <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #f3f4f6", overflow: "hidden", marginTop: 10 }}>
-                  <div style={{ padding: "10px 14px 8px", background: "#fafafa", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontSize: 16 }}>🍽️</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>Đồ ăn</span>
-                    <span style={{ fontSize: 11, color: "#d1d5db", marginLeft: "auto" }}>{foods.length} món</span>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "22px 38px 1fr 48px 72px 78px", gap: "0 6px", padding: "7px 12px", background: "#f9fafb", borderBottom: "1px solid #f3f4f6" }}>
-                    {["#", "", "Tên", "Phần", "Đơn giá", "T.Tiền"].map((h, idx) => (
-                      <span key={idx} style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textAlign: idx >= 3 ? "right" : "left", textTransform: "uppercase", letterSpacing: 0.5 }}>{h}</span>
-                    ))}
-                  </div>
-                  <div style={foods.length > 10 ? { maxHeight: 480, overflowY: "auto" } : undefined}>
-                    {foods.map((item, i) => {
-                      const color = avatarColor(item.productName);
-                      const letter = item.productName.trim()[0]?.toUpperCase() ?? "?";
-                      const unit = UNIT[item.saleUnit] ?? item.saleUnit;
-                      const prod = productByName[item.productName.trim().toLowerCase()];
-                      const itemImgUrl = prod ? resolveImgUrl(prod.imageUrl) : null;
-                      const itemUseFetch = !!(prod?.imageUrl?.startsWith("/uploads/")) && IS_NGROK;
-                      return (
-                        <div key={item.id} style={{ display: "grid", gridTemplateColumns: "22px 38px 1fr 48px 72px 78px", gap: "0 6px", padding: "11px 12px", alignItems: "center", borderBottom: i < foods.length - 1 ? "1px solid #f9fafb" : "none" }}>
-                          <span style={{ fontSize: 12, color: "#9ca3af", fontWeight: 600 }}>{i + 1}</span>
-                          {/* Thumbnail ảnh món — cùng pattern với menu card */}
-                          <div style={{ position: "relative", width: 36, height: 36, flexShrink: 0 }}>
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            {itemImgUrl && (itemUseFetch
-                              ? <img data-local-img="1" data-img-src={itemImgUrl} alt=""
-                                  style={{ position: "absolute", inset: 0, width: "100%", height: "100%", borderRadius: 8, objectFit: "cover", display: "none" }} />
-                              : <img data-prod-img="1" src={itemImgUrl} alt=""
-                                  style={{ position: "absolute", inset: 0, width: "100%", height: "100%", borderRadius: 8, objectFit: "cover" }} />
-                            )}
-                            <div data-prod-letter="1" style={{ width: 36, height: 36, borderRadius: 8, background: color, color: "#fff", display: (itemImgUrl && !itemUseFetch) ? "none" : "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700 }}>
-                              {letter}
-                            </div>
-                          </div>
-                          <span style={{ fontSize: 13, fontWeight: 600, color: "#1f2937", lineHeight: 1.3, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
-                            {item.productName}
-                            {item.fromBooking && <span style={{ marginLeft: 4, fontSize: 9, background: "#eff6ff", color: "#3b82f6", padding: "1px 4px", borderRadius: 99 }}>BK</span>}
-                          </span>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: "#374151", textAlign: "right" }}>
-                            {item.quantity}<span style={{ fontSize: 10, color: "#9ca3af", marginLeft: 2 }}>{unit}</span>
-                          </span>
-                          <span style={{ fontSize: 11, color: "#6b7280", textAlign: "right", whiteSpace: "nowrap" }}>{fmt(item.productPrice)}</span>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: "#1f2937", textAlign: "right", whiteSpace: "nowrap" }}>{fmt(item.itemTotal)}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Surcharge */}
-              <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #fed7aa", overflow: "hidden", marginTop: 10 }}>
-                <div style={{ padding: "10px 14px 8px", background: "#fff7ed", borderBottom: "1px solid #fed7aa", display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ fontSize: 15 }}>⚠️</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: "#c2410c" }}>Phụ thu</span>
-                  <span style={{ fontSize: 11, color: "#fb923c", marginLeft: "auto" }}>
-                    {fmt((order.surcharges ?? []).reduce((s, c) => s + c.amount, 0))}
-                  </span>
-                </div>
-                {(order.surcharges ?? []).length > 0 && (
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 48px 72px 78px", gap: "0 6px", padding: "6px 12px", background: "#fffbf7", borderBottom: "1px solid #fed7aa" }}>
-                    {["Tên", "SL", "Đơn giá", "T.Tiền"].map((h, i) => (
-                      <span key={i} style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textAlign: i >= 1 ? "right" : "left", textTransform: "uppercase" }}>{h}</span>
-                    ))}
-                  </div>
-                )}
-                {(order.surcharges ?? []).map((sc, i, arr) => (
-                  <div key={sc.id} style={{ display: "grid", gridTemplateColumns: "1fr 48px 72px 78px", gap: "0 6px", padding: "10px 12px", alignItems: "center", borderBottom: i < arr.length - 1 ? "1px solid #fff7ed" : "none" }}>
-                    <p style={{ fontSize: 13, fontWeight: 600, color: "#c2410c", margin: 0 }}>{sc.name}</p>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "#374151", textAlign: "right" }}>{sc.quantity}</span>
-                    <span style={{ fontSize: 11, color: "#6b7280", textAlign: "right", whiteSpace: "nowrap" }}>{fmt(sc.unitPrice)}</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "#c2410c", textAlign: "right", whiteSpace: "nowrap" }}>{fmt(sc.amount)}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Total */}
-              <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #f3f4f6", padding: "14px 16px", marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 15 }}>
-                  <span style={{ color: "#6b7280", fontWeight: 600 }}>Tổng cộng</span>
-                  <span style={{ fontWeight: 800, color: "#1f2937" }}>{fmt(order.totalAmount)}</span>
-                </div>
-                {prepaid > 0 && (
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#16a34a" }}>
-                    <span>Đã cọc trước</span><span>− {fmt(prepaid)}</span>
-                  </div>
-                )}
-                {netRefund > 0 && (
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: "#d97706", borderTop: "1px solid #e5e7eb", paddingTop: 8 }}>
-                    <span>Hoàn lại khách</span><span>− {fmt(netRefund)}</span>
-                  </div>
-                )}
-                {remaining > 0 && (
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 15, fontWeight: 800, color: "#c2410c", borderTop: "1px solid #e5e7eb", paddingTop: 8 }}>
-                    <span>Còn phải trả</span><span>{fmt(remaining)}</span>
-                  </div>
-                )}
-                {remaining === 0 && netRefund === 0 && prepaid > 0 && (
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: "#16a34a", borderTop: "1px solid #e5e7eb", paddingTop: 8 }}>
-                    <span>Đã thanh toán đủ</span><span>✓</span>
-                  </div>
-                )}
-              </div>
-
-              <div style={{ marginTop: 10, background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 16, padding: "14px 20px", textAlign: "center" }}>
-                <p style={{ fontSize: 14, fontWeight: 600, color: "#c2410c", margin: "0 0 3px" }}>📢 Muốn gọi thêm món?</p>
-                <p style={{ fontSize: 12, color: "#ea580c", margin: 0 }}>Vui lòng gọi nhân viên để được phục vụ</p>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-
-      {/* ── Drawer toggle arrow — vùng bấm trong suốt mở rộng xung quanh mũi tên ── */}
-      <button id="drawer-toggle-btn" style={{ position: "fixed", right: 0, top: "50%", transform: "translateY(-50%)", zIndex: 55, border: "none", cursor: "pointer", background: "transparent", padding: "70px 0 70px 52px", WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}>
-        <span id="drawer-arrow" style={{ display: "block", background: "#f97316", color: "#fff", borderRadius: "12px 0 0 12px", padding: "44px 7px", fontSize: 20, fontWeight: 700, lineHeight: 1, boxShadow: "-3px 0 10px rgba(0,0,0,0.15)" }}>‹</span>
+      {/* ── Scroll-to-top button ── */}
+      <button
+        id="scroll-top-btn"
+        aria-label="Lên đầu trang"
+        style={{
+          position: "fixed", bottom: 78, right: 16,
+          width: 44, height: 44, borderRadius: "50%",
+          background: "#ea580c", color: "#fff", border: "none", cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          boxShadow: "0 4px 12px rgba(234,88,12,0.4)",
+          zIndex: 36,
+          opacity: 0, visibility: "hidden",
+          transition: "opacity 0.2s, transform 0.2s, visibility 0.2s",
+          transform: "translateY(8px)",
+          touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
+        }}
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 15l-6-6-6 6" />
+        </svg>
       </button>
 
-      {/* ── Floating bottom bar ── */}
-      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#fff", borderTop: "1.5px solid #f0f0f0", padding: "10px 16px", display: "flex", alignItems: "center", gap: 8, zIndex: 35, boxShadow: "0 -2px 12px rgba(0,0,0,0.07)" }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {order ? (
-            <>
-              {/* Tổng cộng + Đã cọc — cùng cỡ chữ nhỏ */}
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: "#6b7280", fontWeight: 600, lineHeight: 1.4 }}>
-                <span>Tổng cộng</span>
-                <span>{fmt(order.totalAmount)}</span>
-              </div>
-              {prepaid > 0 && (
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: "#16a34a", fontWeight: 600, lineHeight: 1.4 }}>
-                  <span>Đã cọc</span>
-                  <span>− {fmt(prepaid)}</span>
-                </div>
-              )}
-              {/* Còn phải trả — to nhất */}
-              {remaining > 0 && (
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 17, fontWeight: 900, color: "#c2410c", lineHeight: 1.2, marginTop: 2 }}>
-                  <span>Còn phải trả</span>
-                  <span>{fmt(remaining)}</span>
-                </div>
-              )}
-              {remaining === 0 && prepaid > 0 && (
-                <div style={{ fontSize: 13, color: "#16a34a", fontWeight: 700, marginTop: 2 }}>✓ Đã thanh toán đủ</div>
-              )}
-              {remaining === 0 && prepaid === 0 && (
-                <div style={{ fontSize: 17, fontWeight: 900, color: "#1f2937", lineHeight: 1.2, marginTop: 2 }}>{fmt(order.totalAmount)}</div>
-              )}
-            </>
-          ) : error ? (
-            <div style={{ fontSize: 12, color: "#f87171" }}>{error}</div>
-          ) : (
-            <div style={{ fontSize: 13, color: "#9ca3af" }}>Chưa có đơn hàng</div>
-          )}
-        </div>
-      </div>
+      {/* ── OrderDrawer (Client Component — tự cập nhật 3s, không reload trang) ── */}
+      <OrderDrawer
+        qrToken={qrToken}
+        tableName={tableName}
+        initialOrder={order}
+        productImages={productImages}
+        isNgrok={IS_NGROK}
+      />
 
-      {/* ── Interaction script ── */}
+      {/* ── Interaction script (category filter + search + localStorage) ── */}
       <Script id="qr-interaction" strategy="afterInteractive" dangerouslySetInnerHTML={{ __html: `
 (function(){
   /* Lưu phiên bàn để TableSessionFloat hiện khi khách ra trang chủ */
@@ -518,66 +292,6 @@ export default async function TableQrPage({ params }: { params: Promise<{ qrToke
       if(_tk) localStorage.setItem('qr_active_table',JSON.stringify({token:_tk,name:_nm,ts:Date.now()}));
     }
   }catch(e){}
-  /* DRAWER */
-  var drawerOpen=false;
-  function openDrawer(){
-    drawerOpen=true;
-    var ov=document.getElementById('order-overlay');
-    var dr=document.getElementById('order-drawer');
-    var ar=document.getElementById('drawer-arrow');
-    if(ov) ov.style.display='block';
-    if(dr) dr.style.transform='translateX(0%)';
-    if(ar) ar.textContent='›';
-    document.body.style.overflow='hidden';
-  }
-  function closeDrawer(){
-    drawerOpen=false;
-    var ov=document.getElementById('order-overlay');
-    var dr=document.getElementById('order-drawer');
-    var ar=document.getElementById('drawer-arrow');
-    if(ov) ov.style.display='none';
-    if(dr) dr.style.transform='translateX(100%)';
-    if(ar) ar.textContent='‹';
-    document.body.style.overflow='';
-  }
-  function toggleDrawer(){ drawerOpen?closeDrawer():openDrawer(); }
-  // pointerdown + click để cover mọi thiết bị; preventDefault trên touch ngăn double-fire
-  function bindBtn(el,fn){
-    if(!el)return;
-    var touchFired=false;
-    el.addEventListener('pointerdown',function(e){
-      if(e.pointerType==='touch'){
-        touchFired=true;
-        e.preventDefault();
-        fn();
-        setTimeout(function(){touchFired=false;},400);
-      }
-    });
-    el.addEventListener('click',function(){if(!touchFired){fn();}});
-  }
-  var toggleBtn=document.getElementById('drawer-toggle-btn');
-  var closeBtn=document.getElementById('drawer-close');
-  var overlay=document.getElementById('order-overlay');
-  bindBtn(toggleBtn,toggleDrawer);
-  bindBtn(closeBtn,closeDrawer);
-  if(overlay){
-    overlay.addEventListener('click',closeDrawer);
-    overlay.addEventListener('pointerdown',function(e){
-      if(e.pointerType==='touch'){e.preventDefault();closeDrawer();}
-    });
-  }
-  // Khôi phục trạng thái drawer + scroll position sau khi reload
-  var restoreDrawer=sessionStorage.getItem('qr_drawer');
-  if(restoreDrawer){
-    sessionStorage.removeItem('qr_drawer');
-    openDrawer();
-    var ds=sessionStorage.getItem('qr_drawer_scroll');
-    if(ds){
-      sessionStorage.removeItem('qr_drawer_scroll');
-      var drawerEl=document.getElementById('order-drawer');
-      if(drawerEl) drawerEl.scrollTop=parseInt(ds,10);
-    }
-  }
 
   /* CATEGORY — scroll to section + highlight active pill */
   var catBtns=document.querySelectorAll('[data-cat-btn]');
@@ -650,6 +364,24 @@ export default async function TableQrPage({ params }: { params: Promise<{ qrToke
         var hasVisible=Array.from(sec.querySelectorAll('[data-prod-id]')).some(function(c){return c.style.display!=='none';});
         sec.style.display=hasVisible?'':'none';
       });
+    });
+  }
+
+  /* SCROLL TO TOP */
+  var scrollBtn=document.getElementById('scroll-top-btn');
+  if(scrollBtn){
+    function updateScrollBtn(){
+      var show=window.scrollY>300;
+      scrollBtn.style.opacity=show?'1':'0';
+      scrollBtn.style.visibility=show?'visible':'hidden';
+      scrollBtn.style.transform=show?'translateY(0)':'translateY(8px)';
+    }
+    window.addEventListener('scroll',updateScrollBtn,{passive:true});
+    scrollBtn.addEventListener('click',function(){
+      window.scrollTo({top:0,behavior:'smooth'});
+    });
+    scrollBtn.addEventListener('pointerdown',function(e){
+      if(e.pointerType==='touch'){e.preventDefault();window.scrollTo({top:0,behavior:'smooth'});}
     });
   }
 

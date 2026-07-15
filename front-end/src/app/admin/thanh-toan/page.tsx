@@ -16,6 +16,8 @@ const METHOD_LABELS: Record<string, { label: string; icon: string }> = {
   CARD:          { label: "Thẻ / POS",    icon: "💳" },
 };
 
+type TimeFilter = "" | "today" | "week" | "month" | "custom";
+
 interface Payment {
   id: number; orderId: number; paymentMethod: string; status: string;
   amount: number; createdAt: string; paidAt?: string; vietQrUrl?: string;
@@ -36,6 +38,81 @@ interface PaymentDetail {
   amount: number; createdAt: string; paidAt?: string; vietQrUrl?: string;
   paidBy?: string; referenceCode?: string; note?: string;
   tableName?: string; tableNumber?: number;
+}
+
+// Lấy ngày hiện tại theo múi giờ VN, format YYYY-MM-DD
+function vnToday(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }).format(new Date());
+}
+
+// Đổi ngày VN (YYYY-MM-DD) sang UTC Instant bắt đầu ngày đó ở VN
+function vnDayStart(vnDate: string): Date {
+  return new Date(vnDate + "T00:00:00+07:00");
+}
+
+// Tính khoảng thời gian theo múi giờ VN (offset: 0=hiện tại, -1=trước 1 kỳ, ...)
+function getDateRange(filter: TimeFilter, offset: number, customFrom?: string, customTo?: string): { from?: string; to?: string } {
+  if (!filter || (filter === "custom" && !customFrom)) return {};
+  const vnDate = vnToday();
+
+  if (filter === "today") {
+    const [y, m, d] = vnDate.split("-").map(Number);
+    const base = new Date(Date.UTC(y, m - 1, d + offset));
+    const baseStr = `${base.getUTCFullYear()}-${String(base.getUTCMonth() + 1).padStart(2, "0")}-${String(base.getUTCDate()).padStart(2, "0")}`;
+    const start = vnDayStart(baseStr);
+    return { from: start.toISOString(), to: new Date(start.getTime() + 86400000).toISOString() };
+  }
+  if (filter === "week") {
+    const [vy, vm, vd] = vnDate.split("-").map(Number);
+    const jsDay = new Date(Date.UTC(vy, vm - 1, vd)).getUTCDay();
+    const dow = jsDay === 0 ? 6 : jsDay - 1;
+    const monday = new Date(vnDayStart(vnDate).getTime() + (offset * 7 - dow) * 86400000);
+    return { from: monday.toISOString(), to: new Date(monday.getTime() + 7 * 86400000).toISOString() };
+  }
+  if (filter === "month") {
+    const [y, m] = vnDate.split("-").map(Number);
+    let tm = m + offset, ty = y;
+    while (tm <= 0) { tm += 12; ty--; }
+    while (tm > 12) { tm -= 12; ty++; }
+    const nm = tm === 12 ? 1 : tm + 1, ny = tm === 12 ? ty + 1 : ty;
+    const start = vnDayStart(`${ty}-${String(tm).padStart(2, "0")}-01`);
+    return { from: start.toISOString(), to: vnDayStart(`${ny}-${String(nm).padStart(2, "0")}-01`).toISOString() };
+  }
+  if (filter === "custom" && customFrom) {
+    const start = vnDayStart(customFrom);
+    return { from: start.toISOString(), to: new Date(vnDayStart(customTo || customFrom).getTime() + 86400000).toISOString() };
+  }
+  return {};
+}
+
+function getNavLabel(filter: TimeFilter, offset: number): string {
+  if (!filter || filter === "custom") return "";
+  const vnDate = vnToday();
+  const fmt = (d: Date) => d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", timeZone: "Asia/Ho_Chi_Minh" });
+
+  if (filter === "today") {
+    const [y, m, d] = vnDate.split("-").map(Number);
+    const ds = fmt(new Date(Date.UTC(y, m - 1, d + offset)));
+    return offset === 0 ? `Hôm nay · ${ds}` : offset === -1 ? `Hôm qua · ${ds}` : ds;
+  }
+  if (filter === "week") {
+    const [vy, vm, vd] = vnDate.split("-").map(Number);
+    const jsDay = new Date(Date.UTC(vy, vm - 1, vd)).getUTCDay();
+    const dow = jsDay === 0 ? 6 : jsDay - 1;
+    const monday = new Date(vnDayStart(vnDate).getTime() + (offset * 7 - dow) * 86400000);
+    const sunday = new Date(monday.getTime() + 6 * 86400000);
+    const range = `${fmt(monday)} – ${fmt(sunday)}`;
+    return offset === 0 ? `Tuần này · ${range}` : offset === -1 ? `Tuần trước · ${range}` : range;
+  }
+  if (filter === "month") {
+    const [y, m] = vnDate.split("-").map(Number);
+    let tm = m + offset, ty = y;
+    while (tm <= 0) { tm += 12; ty--; }
+    while (tm > 12) { tm -= 12; ty++; }
+    const ms = `T${tm}/${ty}`;
+    return offset === 0 ? `Tháng này · ${ms}` : offset === -1 ? `Tháng trước · ${ms}` : ms;
+  }
+  return "";
 }
 
 // ── Detail Drawer ─────────────────────────────────────────────────────────────
@@ -72,7 +149,10 @@ function DetailDrawer({
 
   function fmt(iso?: string) {
     if (!iso) return "—";
-    return new Date(iso).toLocaleString("vi-VN", { day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit" });
+    return new Date(iso).toLocaleString("vi-VN", {
+      timeZone: "Asia/Ho_Chi_Minh",
+      day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+    });
   }
 
   const remaining = order ? Math.max(0, order.totalAmount - order.prepaidAmount) : 0;
@@ -81,7 +161,6 @@ function DetailDrawer({
   return (
     <>
       <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
-      {/* Full-width on mobile, 448px panel on desktop */}
       <div className="fixed right-0 top-0 h-full w-full sm:max-w-md bg-white z-50 shadow-2xl flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-gray-100 bg-white">
@@ -111,7 +190,6 @@ function DetailDrawer({
             <div className="text-center text-gray-400 py-10 text-sm">Không tìm thấy giao dịch</div>
           ) : (
             <>
-              {/* Payment info */}
               <div className="bg-gray-50 rounded-2xl p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className={`px-3 py-1 rounded-full text-xs font-bold ${STATUS_STYLE[payment.status] ?? "bg-gray-100 text-gray-600"}`}>
@@ -151,7 +229,6 @@ function DetailDrawer({
                 </div>
               </div>
 
-              {/* VietQR */}
               {payment.status === "PENDING" && payment.paymentMethod === "BANK_TRANSFER" && payment.vietQrUrl && (
                 <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 text-center">
                   <p className="text-xs text-blue-600 mb-3 font-medium">Mã QR chuyển khoản</p>
@@ -160,7 +237,6 @@ function DetailDrawer({
                 </div>
               )}
 
-              {/* Order items */}
               {order && (
                 <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
                   <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
@@ -212,7 +288,6 @@ function DetailDrawer({
                 </div>
               )}
 
-              {/* Actions */}
               {payment.status === "PENDING" && (
                 <div className="space-y-2">
                   <button
@@ -263,6 +338,10 @@ export default function AdminPaymentsPage() {
   const [totalElements,  setTotalElements] = useState(0);
   const [statusFilter,   setStatusFilter]  = useState("");
   const [methodFilter,   setMethodFilter]  = useState("");
+  const [timeFilter,     setTimeFilter]    = useState<TimeFilter>("");
+  const [navOffset,      setNavOffset]     = useState(0);
+  const [customFrom,     setCustomFrom]    = useState("");
+  const [customTo,       setCustomTo]      = useState("");
   const [hideExpiredBT,  setHideExpiredBT] = useState(true);
   const [actionLoading,  setActionLoading] = useState<number | null>(null);
   const [changingMethod, setChangingMethod]= useState<number | null>(null);
@@ -277,7 +356,6 @@ export default function AdminPaymentsPage() {
 
   const load = useCallback(async (p = page, preserveScroll = false) => {
     if (preserveScroll) {
-      // Lưu scroll position trước khi reload
       const el = document.getElementById("admin-scroll-content");
       savedScroll.current = el ? el.scrollTop : window.scrollY;
       setRefreshing(true);
@@ -288,6 +366,9 @@ export default function AdminPaymentsPage() {
       const params = new URLSearchParams({ page: String(p), size: "15" });
       if (statusFilter) params.set("status", statusFilter);
       if (methodFilter) params.set("method", methodFilter);
+      const range = getDateRange(timeFilter, navOffset, customFrom, customTo);
+      if (range.from) params.set("from", range.from);
+      if (range.to)   params.set("to",   range.to);
       const res  = await fetch(`${BASE}/payments?${params}`, { headers: getAuthHeaders() });
       const json = await res.json();
       if (json.statusCode === 200) {
@@ -299,7 +380,6 @@ export default function AdminPaymentsPage() {
       setLoading(false);
       setRefreshing(false);
       if (preserveScroll) {
-        // Khôi phục scroll sau khi React render xong
         setTimeout(() => {
           const el = document.getElementById("admin-scroll-content");
           if (el) el.scrollTop = savedScroll.current;
@@ -307,7 +387,7 @@ export default function AdminPaymentsPage() {
         }, 30);
       }
     }
-  }, [page, statusFilter, methodFilter]);
+  }, [page, statusFilter, methodFilter, timeFilter, navOffset, customFrom, customTo]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -346,12 +426,30 @@ export default function AdminPaymentsPage() {
 
   function fmtShort(iso?: string) {
     if (!iso) return "—";
-    return new Date(iso).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    return new Date(iso).toLocaleString("vi-VN", {
+      timeZone: "Asia/Ho_Chi_Minh",
+      day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+    });
   }
   function fmtFull(iso?: string) {
     if (!iso) return "—";
-    return new Date(iso).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    return new Date(iso).toLocaleString("vi-VN", {
+      timeZone: "Asia/Ho_Chi_Minh",
+      day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+    });
   }
+
+  function clearAllFilters() {
+    setPage(0);
+    setStatusFilter("");
+    setMethodFilter("");
+    setTimeFilter("");
+    setNavOffset(0);
+    setCustomFrom("");
+    setCustomTo("");
+  }
+
+  const hasActiveFilter = !!(statusFilter || methodFilter || timeFilter);
 
   const EXPIRE_MS = 30 * 60 * 1000;
   const displayedPayments = hideExpiredBT
@@ -371,6 +469,12 @@ export default function AdminPaymentsPage() {
     { value: "", label: "Mọi phương thức" },
     { value: "CASH", label: "💵 Tiền mặt" },
     { value: "BANK_TRANSFER", label: "📱 Chuyển khoản" },
+  ];
+  const timeOptions: { value: TimeFilter; label: string }[] = [
+    { value: "today", label: "Hôm nay" },
+    { value: "week",  label: "Tuần này" },
+    { value: "month", label: "Tháng này" },
+    { value: "custom", label: "Tùy chọn" },
   ];
 
   return (
@@ -409,62 +513,132 @@ export default function AdminPaymentsPage() {
         </Link>
       </div>
 
-      {/* Filters — horizontal scroll on mobile */}
-      <div className="overflow-x-auto -mx-3 px-3 md:mx-0 md:px-0 mb-4 pb-1">
-        <div className="flex items-center gap-1.5 min-w-max md:flex-wrap md:min-w-0 md:gap-2">
-          {statusOptions.map(({ value, label }) => (
-            <button key={value}
-              onClick={() => { setPage(0); setStatusFilter(value); }}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors whitespace-nowrap touch-manipulation ${
-                statusFilter === value
-                  ? "bg-primary text-white border-primary"
-                  : "bg-canvas text-muted border-hairline"
-              }`}
-              style={{ WebkitTapHighlightColor: "transparent" }}>
-              {label}
-            </button>
-          ))}
+      {/* ── Filters ── */}
+      <div className="space-y-2 mb-4">
+        {/* Row 1: status + method */}
+        <div className="overflow-x-auto -mx-3 px-3 md:mx-0 md:px-0 pb-1">
+          <div className="flex items-center gap-1.5 min-w-max md:flex-wrap md:min-w-0 md:gap-2">
+            {statusOptions.map(({ value, label }) => (
+              <button key={value}
+                onClick={() => { setPage(0); setStatusFilter(value); }}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors whitespace-nowrap touch-manipulation ${
+                  statusFilter === value
+                    ? "bg-primary text-white border-primary"
+                    : "bg-canvas text-muted border-hairline"
+                }`}
+                style={{ WebkitTapHighlightColor: "transparent" }}>
+                {label}
+              </button>
+            ))}
 
-          <div className="w-px h-5 bg-hairline mx-0.5 flex-shrink-0" />
+            <div className="w-px h-5 bg-hairline mx-0.5 flex-shrink-0" />
 
-          {methodOptions.map(({ value, label }) => (
-            <button key={value}
-              onClick={() => { setPage(0); setMethodFilter(value); }}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors whitespace-nowrap touch-manipulation ${
-                methodFilter === value
-                  ? "bg-ink text-canvas border-ink"
-                  : "bg-canvas text-muted border-hairline"
-              }`}
-              style={{ WebkitTapHighlightColor: "transparent" }}>
-              {label}
-            </button>
-          ))}
+            {methodOptions.map(({ value, label }) => (
+              <button key={value}
+                onClick={() => { setPage(0); setMethodFilter(value); }}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors whitespace-nowrap touch-manipulation ${
+                  methodFilter === value
+                    ? "bg-ink text-canvas border-ink"
+                    : "bg-canvas text-muted border-hairline"
+                }`}
+                style={{ WebkitTapHighlightColor: "transparent" }}>
+                {label}
+              </button>
+            ))}
 
-          {(statusFilter || methodFilter) && (
-            <button onClick={() => { setPage(0); setStatusFilter(""); setMethodFilter(""); }}
-              className="px-2.5 py-1.5 text-xs text-primary underline whitespace-nowrap touch-manipulation"
-              style={{ WebkitTapHighlightColor: "transparent" }}>
-              Xóa lọc
-            </button>
-          )}
-
-          <div className="w-px h-5 bg-hairline mx-0.5 flex-shrink-0" />
-
-          <button onClick={() => setHideExpiredBT(v => !v)}
-            className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded-full border transition-colors whitespace-nowrap touch-manipulation ${
-              hideExpiredBT
-                ? "bg-canvas text-muted border-hairline"
-                : "bg-amber-100 text-amber-700 border-amber-200"
-            }`}
-            style={{ WebkitTapHighlightColor: "transparent" }}>
-            {hideExpiredBT ? "Ẩn CK hết hạn" : "Hiện CK hết hạn"}
-          </button>
+            {hasActiveFilter && (
+              <>
+                <div className="w-px h-5 bg-hairline mx-0.5 flex-shrink-0" />
+                <button onClick={clearAllFilters}
+                  className="px-2.5 py-1.5 text-xs text-primary underline whitespace-nowrap touch-manipulation"
+                  style={{ WebkitTapHighlightColor: "transparent" }}>
+                  Xóa lọc
+                </button>
+              </>
+            )}
+          </div>
         </div>
+
+        {/* Row 2: time filters + ẩn/hiện CK hết hạn */}
+        <div className="overflow-x-auto -mx-3 px-3 md:mx-0 md:px-0 pb-1">
+          <div className="flex items-center gap-1.5 min-w-max md:flex-wrap md:min-w-0 md:gap-2">
+            <span className="text-xs text-muted font-medium flex-shrink-0">Thời gian:</span>
+            {timeOptions.map(({ value, label }) => (
+              <button key={value}
+                onClick={() => { setPage(0); setNavOffset(0); setTimeFilter(timeFilter === value ? "" : value); }}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors whitespace-nowrap touch-manipulation ${
+                  timeFilter === value
+                    ? "bg-blue-500 text-white border-blue-500"
+                    : "bg-canvas text-muted border-hairline"
+                }`}
+                style={{ WebkitTapHighlightColor: "transparent" }}>
+                {label}
+              </button>
+            ))}
+
+            <div className="w-px h-5 bg-hairline mx-0.5 flex-shrink-0" />
+
+            <button onClick={() => setHideExpiredBT(v => !v)}
+              className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded-full border transition-colors whitespace-nowrap touch-manipulation ${
+                hideExpiredBT
+                  ? "bg-canvas text-muted border-hairline"
+                  : "bg-amber-100 text-amber-700 border-amber-200"
+              }`}
+              style={{ WebkitTapHighlightColor: "transparent" }}>
+              {hideExpiredBT ? "Ẩn CK hết hạn" : "Hiện CK hết hạn"}
+            </button>
+          </div>
+        </div>
+
+        {/* Navigation lùi / tiến kỳ */}
+        {timeFilter && timeFilter !== "custom" && (
+          <div className="flex items-center justify-center gap-1.5">
+            <button
+              onClick={() => { setNavOffset(o => o - 1); setPage(0); }}
+              className="w-9 h-9 flex items-center justify-center rounded-full border border-hairline bg-canvas text-ink hover:bg-gray-50 text-2xl leading-none touch-manipulation"
+              style={{ WebkitTapHighlightColor: "transparent" }}>
+              ‹
+            </button>
+            <span className="text-xs font-medium text-ink text-center min-w-[150px]">
+              {getNavLabel(timeFilter, navOffset)}
+            </span>
+            <button
+              onClick={() => { setNavOffset(o => Math.min(0, o + 1)); setPage(0); }}
+              disabled={navOffset >= 0}
+              className="w-9 h-9 flex items-center justify-center rounded-full border border-hairline bg-canvas text-ink hover:bg-gray-50 disabled:opacity-30 text-2xl leading-none touch-manipulation"
+              style={{ WebkitTapHighlightColor: "transparent" }}>
+              ›
+            </button>
+            {navOffset < 0 && (
+              <button
+                onClick={() => { setNavOffset(0); setPage(0); }}
+                className="text-[11px] text-blue-500 border border-blue-300 px-2 py-0.5 rounded-full hover:bg-blue-50 touch-manipulation flex-shrink-0"
+                style={{ WebkitTapHighlightColor: "transparent" }}>
+                Về {timeFilter === "today" ? "hôm nay" : timeFilter === "week" ? "tuần này" : "tháng này"}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Custom date picker */}
+        {timeFilter === "custom" && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-muted">Từ</span>
+            <input type="date" value={customFrom}
+              onChange={e => { setCustomFrom(e.target.value); setPage(0); }}
+              className="border border-hairline rounded-lg px-2.5 py-1.5 text-xs text-ink bg-canvas focus:outline-none focus:border-primary"
+            />
+            <span className="text-xs text-muted">đến</span>
+            <input type="date" value={customTo} min={customFrom}
+              onChange={e => { setCustomTo(e.target.value); setPage(0); }}
+              className="border border-hairline rounded-lg px-2.5 py-1.5 text-xs text-ink bg-canvas focus:outline-none focus:border-primary"
+            />
+          </div>
+        )}
       </div>
 
       {/* ── Mobile: Card List ── */}
       <div className="block md:hidden space-y-2.5">
-        {/* Thanh refresh mỏng — chỉ hiện khi reload giữ data cũ */}
         {refreshing && (
           <div className="h-0.5 bg-hairline rounded-full overflow-hidden -mx-3">
             <div className="h-full bg-primary rounded-full animate-pulse w-1/2 mx-auto" />
@@ -488,7 +662,6 @@ export default function AdminPaymentsPage() {
                 isSelected ? "bg-primary/5 border-primary/30" : "bg-white border-hairline"
               }`}
               style={{ WebkitTapHighlightColor: "transparent" }}>
-              {/* Row 1: method + status badge */}
               <div className="flex items-center justify-between mb-2.5">
                 <div className="flex items-center gap-1.5">
                   <span className="text-base">{mInfo?.icon}</span>
@@ -500,7 +673,6 @@ export default function AdminPaymentsPage() {
                 </span>
               </div>
 
-              {/* Row 2: table/order + amount */}
               <div className="flex items-end justify-between mb-3">
                 <div>
                   <div className="text-sm font-semibold text-ink">
@@ -511,7 +683,6 @@ export default function AdminPaymentsPage() {
                 <div className="text-xl font-black text-ink">{formatPrice(p.amount)}</div>
               </div>
 
-              {/* Row 3: time + action buttons */}
               <div className="flex items-center justify-between pt-2.5 border-t border-hairline" onClick={e => e.stopPropagation()}>
                 <span className="text-xs text-muted-soft">{fmtShort(p.createdAt)}</span>
                 <div className="flex items-center gap-2">
@@ -540,7 +711,6 @@ export default function AdminPaymentsPage() {
           );
         })}
 
-        {/* Pagination mobile */}
         {totalPages > 1 && (
           <div className="flex items-center justify-center gap-4 pt-2 pb-4">
             <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
@@ -643,7 +813,6 @@ export default function AdminPaymentsPage() {
           </table>
         </div>
 
-        {/* Pagination desktop */}
         {totalPages > 1 && (
           <div className="flex items-center justify-center gap-3 p-4 border-t border-hairline bg-surface-soft">
             <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}

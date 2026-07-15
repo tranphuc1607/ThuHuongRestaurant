@@ -7,12 +7,29 @@ import { QRCodeSVG } from "qrcode.react";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api/v1";
 
+type TableZone = "INDOOR_FLOOR_1" | "INDOOR_FLOOR_2" | "OUTDOOR";
+
+const ZONE_LABEL: Record<TableZone, string> = {
+  INDOOR_FLOOR_1: "Tầng 1",
+  INDOOR_FLOOR_2: "Tầng 2",
+  OUTDOOR: "Ngoài trời",
+};
+
+const ZONE_ICON: Record<TableZone, string> = {
+  INDOOR_FLOOR_1: "🏠",
+  INDOOR_FLOOR_2: "🏢",
+  OUTDOOR: "🌿",
+};
+
+const ZONES: TableZone[] = ["OUTDOOR", "INDOOR_FLOOR_1", "INDOOR_FLOOR_2"];
+
 interface TableItem {
   id: number;
   tableNumber: number;
   name: string;
   qrToken: string;
   status: "AVAILABLE" | "OCCUPIED";
+  zone: TableZone;
   note?: string;
 }
 interface OrderItem {
@@ -41,11 +58,14 @@ type TableModal =
   | { type: "delete"; table: TableItem }
   | null;
 
+type ZoneFilter = TableZone | "ALL";
+
 export default function AdminTablePage() {
   const router = useRouter();
   const [tables, setTables] = useState<TableItem[]>([]);
   const [refundMap, setRefundMap] = useState<RefundMap>({});
   const [loading, setLoading] = useState(true);
+  const [activeZone, setActiveZone] = useState<ZoneFilter>("ALL");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pointerDownPos = useRef<{ x: number; y: number } | null>(null);
 
@@ -72,6 +92,7 @@ export default function AdminTablePage() {
   const [tableModal, setTableModal] = useState<TableModal>(null);
   const [fNumber, setFNumber] = useState("");
   const [fName, setFName] = useState("");
+  const [fZone, setFZone] = useState<TableZone>("INDOOR_FLOOR_1");
   const [fNote, setFNote] = useState("");
   const [fError, setFError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -243,12 +264,12 @@ export default function AdminTablePage() {
   }
 
   function openCreateTable() {
-    setFNumber(""); setFName(""); setFNote(""); setFError("");
+    setFNumber(""); setFName(""); setFZone("INDOOR_FLOOR_1"); setFNote(""); setFError("");
     setTableModal({ type: "create" });
   }
 
   function openEditTable(table: TableItem) {
-    setFName(table.name); setFNote(table.note ?? ""); setFError("");
+    setFName(table.name); setFZone(table.zone ?? "INDOOR_FLOOR_1"); setFNote(table.note ?? ""); setFError("");
     closePanel();
     setTableModal({ type: "edit", table });
   }
@@ -267,7 +288,7 @@ export default function AdminTablePage() {
       const res = await fetch(`${BASE}/orders/tables`, {
         method: "POST",
         headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ tableNumber: Number(fNumber), name: fName.trim(), note: fNote.trim() || undefined }),
+        body: JSON.stringify({ tableNumber: Number(fNumber), name: fName.trim(), zone: fZone, note: fNote.trim() || undefined }),
       });
       const json = await res.json();
       if (res.ok && json.statusCode === 200) {
@@ -284,7 +305,7 @@ export default function AdminTablePage() {
       const res = await fetch(`${BASE}/orders/tables/${tableModal.table.id}`, {
         method: "PUT",
         headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ name: fName.trim(), note: fNote.trim() || undefined }),
+        body: JSON.stringify({ name: fName.trim(), zone: fZone, note: fNote.trim() || undefined }),
       });
       const json = await res.json();
       if (res.ok && json.statusCode === 200) {
@@ -309,12 +330,21 @@ export default function AdminTablePage() {
 
   // ── Derived ───────────────────────────────────────────────────────────────
 
-  const available    = tables.filter(t => t.status === "AVAILABLE").length;
-  const occupied     = tables.filter(t => t.status === "OCCUPIED").length;
-  const refundCount  = Object.keys(refundMap).length;
-  const panelPrepaid    = currentOrder?.prepaidAmount ?? 0;
-  const panelNetRefund  = Math.round(panelPrepaid - (currentOrder?.totalAmount ?? 0));
+  const available   = tables.filter(t => t.status === "AVAILABLE").length;
+  const occupied    = tables.filter(t => t.status === "OCCUPIED").length;
+  const refundCount = Object.keys(refundMap).length;
+
+  const panelPrepaid   = currentOrder?.prepaidAmount ?? 0;
+  const panelNetRefund = Math.round(panelPrepaid - (currentOrder?.totalAmount ?? 0));
   const panelNeedRefund = panelNetRefund > 0;
+
+  const filteredTables = activeZone === "ALL" ? tables : tables.filter(t => t.zone === activeZone);
+
+  // Count per zone
+  const zoneCounts = ZONES.reduce((acc, z) => {
+    acc[z] = tables.filter(t => t.zone === z).length;
+    return acc;
+  }, {} as Record<TableZone, number>);
 
   if (loading) {
     return (
@@ -340,7 +370,7 @@ export default function AdminTablePage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-lg md:text-xl font-bold text-ink">Quản lý bàn</h1>
+            <h1 className="text-lg md:text-xl font-bold text-ink">Sơ đồ bàn</h1>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5 text-sm">
               <span className="text-green-600 font-semibold">{available} trống</span>
               <span className="text-orange-500 font-semibold">{occupied} phục vụ</span>
@@ -370,6 +400,40 @@ export default function AdminTablePage() {
           </div>
         )}
 
+        {/* Zone tabs */}
+        <div className="flex gap-1 mb-4 p-1 bg-surface-soft rounded-xl overflow-x-auto">
+          <button
+            onClick={() => setActiveZone("ALL")}
+            className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+              activeZone === "ALL"
+                ? "bg-canvas shadow text-ink"
+                : "text-muted-soft hover:text-ink"
+            }`}
+          >
+            Tất cả
+            <span className={`text-xs px-1.5 py-0.5 rounded-full ${activeZone === "ALL" ? "bg-primary/10 text-primary" : "bg-hairline text-muted-soft"}`}>
+              {tables.length}
+            </span>
+          </button>
+          {ZONES.map(zone => (
+            <button
+              key={zone}
+              onClick={() => setActiveZone(zone)}
+              className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+                activeZone === zone
+                  ? "bg-canvas shadow text-ink"
+                  : "text-muted-soft hover:text-ink"
+              }`}
+            >
+              <span>{ZONE_ICON[zone]}</span>
+              <span>{ZONE_LABEL[zone]}</span>
+              <span className={`text-xs px-1.5 py-0.5 rounded-full ${activeZone === zone ? "bg-primary/10 text-primary" : "bg-hairline text-muted-soft"}`}>
+                {zoneCounts[zone]}
+              </span>
+            </button>
+          ))}
+        </div>
+
         {/* Legend */}
         <div className="flex flex-wrap gap-4 mb-4 text-xs text-muted">
           <span className="flex items-center gap-1.5">
@@ -386,63 +450,50 @@ export default function AdminTablePage() {
           </span>
         </div>
 
-        {/* Table grid */}
-        {tables.length === 0 ? (
-          <div className="text-center py-20 text-muted-soft">
-            <div className="text-5xl mb-3">🪑</div>
-            <p className="text-sm">Chưa có bàn nào</p>
-            <button onClick={openCreateTable}
-              className="mt-4 px-4 py-2 bg-primary text-white text-sm rounded-lg hover:bg-primary-dark">
-              Thêm bàn đầu tiên
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-            {tables.map((table) => {
-              const isOccupied  = table.status === "OCCUPIED";
-              const isSelected  = selectedTable?.id === table.id;
-              const refundInfo  = refundMap[table.id];
-              const needsRefund = !!refundInfo;
-
+        {/* Table grid — by zone if ALL selected, else flat */}
+        {activeZone === "ALL" ? (
+          <div className="space-y-6">
+            {ZONES.map(zone => {
+              const zoneTables = tables.filter(t => t.zone === zone);
+              if (zoneTables.length === 0) return null;
               return (
-                <button
-                  key={table.id}
-                  onPointerDown={(e) => { pointerDownPos.current = { x: e.clientX, y: e.clientY }; }}
-                  onClick={(e) => {
-                    const start = pointerDownPos.current;
-                    if (start && (Math.abs(e.clientX - start.x) > 8 || Math.abs(e.clientY - start.y) > 8)) return;
-                    openPanel(table);
-                  }}
-                  className={[
-                    "relative text-left p-3 rounded-xl border-2 shadow-sm transition-all active:scale-95 min-h-[76px] touch-manipulation",
-                    needsRefund
-                      ? `bg-amber-50 border-amber-400 ${isSelected ? "ring-2 ring-amber-400 ring-offset-1" : ""}`
-                      : isOccupied
-                      ? `bg-orange-50 border-orange-300 ${isSelected ? "ring-2 ring-orange-400 ring-offset-1" : ""}`
-                      : `bg-canvas border-green-300 hover:border-green-400 ${isSelected ? "ring-2 ring-green-400 ring-offset-1" : ""}`,
-                  ].join(" ")}
-                  style={{ WebkitTapHighlightColor: "transparent" }}
-                >
-                  {needsRefund && (
-                    <div className="absolute -top-2 -right-2 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shadow leading-none">
-                      💰
-                    </div>
-                  )}
-                  <div className="text-[10px] text-muted-soft mb-1">#{table.tableNumber}</div>
-                  <div className="font-bold text-ink text-sm leading-tight truncate">{table.name}</div>
-                  {needsRefund ? (
-                    <div className="text-[10px] mt-1.5 text-amber-600 font-semibold">
-                      Hoàn {formatPrice(refundInfo.refundAmount)}
-                    </div>
-                  ) : (
-                    <div className={`text-[10px] mt-1.5 font-semibold ${isOccupied ? "text-orange-500" : "text-green-600"}`}>
-                      {isOccupied ? "Xem đơn →" : "+ Mở bàn"}
-                    </div>
-                  )}
-                </button>
+                <div key={zone}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-base">{ZONE_ICON[zone]}</span>
+                    <span className="font-bold text-ink text-sm">{ZONE_LABEL[zone]}</span>
+                    <span className="text-xs text-muted-soft">({zoneTables.length} bàn)</span>
+                    <div className="flex-1 h-px bg-hairline" />
+                  </div>
+                  <TableGrid
+                    tables={zoneTables}
+                    refundMap={refundMap}
+                    selectedTable={selectedTable}
+                    pointerDownPos={pointerDownPos}
+                    onSelect={openPanel}
+                  />
+                </div>
               );
             })}
           </div>
+        ) : (
+          filteredTables.length === 0 ? (
+            <div className="text-center py-20 text-muted-soft">
+              <div className="text-5xl mb-3">🪑</div>
+              <p className="text-sm">Chưa có bàn nào trong khu vực này</p>
+              <button onClick={openCreateTable}
+                className="mt-4 px-4 py-2 bg-primary text-white text-sm rounded-lg hover:bg-primary-dark">
+                Thêm bàn
+              </button>
+            </div>
+          ) : (
+            <TableGrid
+              tables={filteredTables}
+              refundMap={refundMap}
+              selectedTable={selectedTable}
+              pointerDownPos={pointerDownPos}
+              onSelect={openPanel}
+            />
+          )
         )}
 
         <div className="h-24 md:hidden" aria-hidden />
@@ -575,6 +626,17 @@ export default function AdminTablePage() {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-muted uppercase tracking-wide mb-1.5">
+                      Khu vực <span className="text-red-400">*</span>
+                    </label>
+                    <select value={fZone} onChange={e => setFZone(e.target.value as TableZone)}
+                      className="w-full border border-hairline px-3 py-2 text-sm rounded-lg outline-none focus:border-primary transition-colors bg-canvas">
+                      <option value="INDOOR_FLOOR_1">🏠 Trong nhà — Tầng 1</option>
+                      <option value="INDOOR_FLOOR_2">🏢 Trong nhà — Tầng 2</option>
+                      <option value="OUTDOOR">🌿 Ngoài trời</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-muted uppercase tracking-wide mb-1.5">
                       Ghi chú <span className="font-normal text-gray-300">(không bắt buộc)</span>
                     </label>
                     <textarea value={fNote} onChange={e => setFNote(e.target.value)}
@@ -610,6 +672,17 @@ export default function AdminTablePage() {
                       onKeyDown={e => { if (e.key === "Enter") handleEditTable(); }}
                       maxLength={100} autoFocus
                       className="w-full border border-hairline px-3 py-2 text-sm rounded-lg outline-none focus:border-primary transition-colors" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-muted uppercase tracking-wide mb-1.5">
+                      Khu vực <span className="text-red-400">*</span>
+                    </label>
+                    <select value={fZone} onChange={e => setFZone(e.target.value as TableZone)}
+                      className="w-full border border-hairline px-3 py-2 text-sm rounded-lg outline-none focus:border-primary transition-colors bg-canvas">
+                      <option value="INDOOR_FLOOR_1">🏠 Trong nhà — Tầng 1</option>
+                      <option value="INDOOR_FLOOR_2">🏢 Trong nhà — Tầng 2</option>
+                      <option value="OUTDOOR">🌿 Ngoài trời</option>
+                    </select>
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-muted uppercase tracking-wide mb-1.5">Ghi chú</label>
@@ -667,6 +740,66 @@ export default function AdminTablePage() {
   );
 }
 
+// ─── Table Grid Component ─────────────────────────────────────────────────────
+interface TableGridProps {
+  tables: TableItem[];
+  refundMap: RefundMap;
+  selectedTable: TableItem | null;
+  pointerDownPos: React.MutableRefObject<{ x: number; y: number } | null>;
+  onSelect: (t: TableItem) => void;
+}
+
+function TableGrid({ tables, refundMap, selectedTable, pointerDownPos, onSelect }: TableGridProps) {
+  return (
+    <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+      {tables.map((table) => {
+        const isOccupied  = table.status === "OCCUPIED";
+        const isSelected  = selectedTable?.id === table.id;
+        const refundInfo  = refundMap[table.id];
+        const needsRefund = !!refundInfo;
+
+        return (
+          <button
+            key={table.id}
+            onPointerDown={(e) => { pointerDownPos.current = { x: e.clientX, y: e.clientY }; }}
+            onClick={(e) => {
+              const start = pointerDownPos.current;
+              if (start && (Math.abs(e.clientX - start.x) > 8 || Math.abs(e.clientY - start.y) > 8)) return;
+              onSelect(table);
+            }}
+            className={[
+              "relative text-left p-3 rounded-xl border-2 shadow-sm transition-all active:scale-95 min-h-[76px] touch-manipulation",
+              needsRefund
+                ? `bg-amber-50 border-amber-400 ${isSelected ? "ring-2 ring-amber-400 ring-offset-1" : ""}`
+                : isOccupied
+                ? `bg-orange-50 border-orange-300 ${isSelected ? "ring-2 ring-orange-400 ring-offset-1" : ""}`
+                : `bg-canvas border-green-300 hover:border-green-400 ${isSelected ? "ring-2 ring-green-400 ring-offset-1" : ""}`,
+            ].join(" ")}
+            style={{ WebkitTapHighlightColor: "transparent" }}
+          >
+            {needsRefund && (
+              <div className="absolute -top-2 -right-2 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shadow leading-none">
+                💰
+              </div>
+            )}
+            <div className="text-[10px] text-muted-soft mb-1">#{table.tableNumber}</div>
+            <div className="font-bold text-ink text-sm leading-tight truncate">{table.name}</div>
+            {needsRefund ? (
+              <div className="text-[10px] mt-1.5 text-amber-600 font-semibold">
+                Hoàn {formatPrice(refundInfo.refundAmount)}
+              </div>
+            ) : (
+              <div className={`text-[10px] mt-1.5 font-semibold ${isOccupied ? "text-orange-500" : "text-green-600"}`}>
+                {isOccupied ? "Xem đơn →" : "+ Mở bàn"}
+              </div>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Shared Panel Content ─────────────────────────────────────────────────────
 interface AdminPanelProps {
   selectedTable: TableItem;
@@ -701,6 +834,7 @@ function AdminPanelContent({
   onEditTable, onDeleteTable,
 }: AdminPanelProps) {
   const isOccupied = selectedTable.status === "OCCUPIED";
+  const zoneLabel = selectedTable.zone ? `${ZONE_ICON[selectedTable.zone]} ${ZONE_LABEL[selectedTable.zone]}` : "";
 
   return (
     <>
@@ -713,6 +847,7 @@ function AdminPanelContent({
           <div className={`text-xs font-medium ${panelNeedRefund ? "text-amber-600" : isOccupied ? "text-orange-500" : "text-green-600"}`}>
             Bàn #{selectedTable.tableNumber} · {panelNeedRefund ? "💰 Cần hoàn tiền" : isOccupied ? "Đang phục vụ" : "Trống"}
           </div>
+          {zoneLabel && <div className="text-[11px] text-muted-soft mt-0.5">{zoneLabel}</div>}
         </div>
         <button onClick={onClose}
           className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/70 hover:bg-white border border-hairline text-sm font-semibold text-gray-600 hover:text-gray-800 transition-colors touch-manipulation"

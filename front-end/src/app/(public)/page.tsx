@@ -164,6 +164,45 @@ export default async function HomePage({
 
       <FeatureSection />
       <QrScannerSection />
+
+      {/* Google Map */}
+      <section className="bg-surface-soft py-12">
+        <div className="max-w-[1200px] mx-auto px-4">
+          <div className="text-center mb-6">
+            <p className="text-primary text-xs uppercase tracking-[4px] font-semibold mb-2">Vị trí</p>
+            <h2 className="text-2xl font-bold text-ink" style={{ fontFamily: "Georgia, serif" }}>
+              Tìm Chúng Tôi
+            </h2>
+            <div className="w-12 h-0.5 bg-primary mx-auto mt-3" />
+          </div>
+          <div className="overflow-hidden shadow-md">
+            <iframe
+              src="https://maps.google.com/maps?q=21.0680346,105.7055247&z=17&hl=vi&output=embed"
+              width="100%"
+              height="320"
+              style={{ border: 0, display: "block" }}
+              allowFullScreen
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+              title="Bản đồ Nhà hàng Thu Hương"
+            />
+          </div>
+          <div className="flex justify-center mt-3">
+            <a
+              href="https://maps.app.goo.gl/aMv4omRjy2BG4rU1A"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-primary font-semibold hover:underline flex items-center gap-1"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/>
+              </svg>
+              Mở trên Google Maps
+            </a>
+          </div>
+        </div>
+      </section>
+
       <BookingCTA />
       <BookingLookup />
     </>
