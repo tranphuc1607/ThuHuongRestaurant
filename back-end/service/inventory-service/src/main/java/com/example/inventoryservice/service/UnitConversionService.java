@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -23,7 +24,7 @@ public class UnitConversionService {
     private final IngredientRepository ingredientRepository;
 
     @Transactional(readOnly = true)
-    public List<UnitConversionResponse> getByIngredientId(Long ingredientId) throws MessageException {
+    public List<UnitConversionResponse> getByIngredientId(UUID ingredientId) throws MessageException {
         Ingredient ingredient = ingredientRepository.findById(ingredientId)
                 .orElseThrow(() -> new MessageException("Không tìm thấy nguyên liệu với id: " + ingredientId));
         return unitConversionRepository.findByIngredient(ingredient)
@@ -50,7 +51,7 @@ public class UnitConversionService {
     }
 
     @Transactional
-    public UnitConversionResponse update(Long id, UnitConversionUpdateRequest req) throws MessageException {
+    public UnitConversionResponse update(UUID id, UnitConversionUpdateRequest req) throws MessageException {
         UnitConversion uc = unitConversionRepository.findById(id)
                 .orElseThrow(() -> new MessageException("Không tìm thấy quy đổi với id: " + id));
 
@@ -61,7 +62,7 @@ public class UnitConversionService {
     }
 
     @Transactional
-    public void delete(Long id) throws MessageException {
+    public void delete(UUID id) throws MessageException {
         if (!unitConversionRepository.existsById(id)) {
             throw new MessageException("Không tìm thấy quy đổi với id: " + id);
         }

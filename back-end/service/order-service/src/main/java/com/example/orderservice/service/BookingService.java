@@ -128,7 +128,7 @@ public class BookingService {
         bookingItemRepository.saveAll(items);
         booking.setItems(items);
 
-        // Notify admin qua Telegram (async, không block response)
+        // Notify admin qua Telegram + Mobile Push (async, không block response)
         final Booking savedBooking = booking;
         CompletableFuture.runAsync(() -> {
             try { bookingAdminBot.notifyNewBooking(savedBooking); }
@@ -141,7 +141,7 @@ public class BookingService {
     }
 
     @Transactional
-    public BookingResponse confirmBooking(Long id, String confirmedBy) throws MessageException {
+    public BookingResponse confirmBooking(UUID id, String confirmedBy) throws MessageException {
         Booking booking = findWithItems(id);
 
         if (booking.getStatus() != BookingStatus.PENDING_PAYMENT) {
@@ -178,7 +178,7 @@ public class BookingService {
     }
 
     @Transactional
-    public BookingResponse confirmCashBooking(Long id, String confirmedBy) throws MessageException {
+    public BookingResponse confirmCashBooking(UUID id, String confirmedBy) throws MessageException {
         Booking booking = findWithItems(id);
 
         if (booking.getStatus() != BookingStatus.PENDING_PAYMENT) {
@@ -217,7 +217,7 @@ public class BookingService {
     }
 
     @Transactional
-    public BookingResponse completeBooking(Long id) throws MessageException {
+    public BookingResponse completeBooking(UUID id) throws MessageException {
         Booking booking = findById(id);
 
         if (booking.getStatus() != BookingStatus.CONFIRMED && booking.getStatus() != BookingStatus.CHECKED_IN) {
@@ -230,7 +230,7 @@ public class BookingService {
     }
 
     @Transactional
-    public BookingResponse cancelBooking(Long id, String cancelledBy, String cancelReason) throws MessageException {
+    public BookingResponse cancelBooking(UUID id, String cancelledBy, String cancelReason) throws MessageException {
         Booking booking = findWithItems(id);
 
         if (booking.getStatus() == BookingStatus.COMPLETED
@@ -268,7 +268,7 @@ public class BookingService {
     }
 
     @Transactional
-    public BookingResponse removeBookingItem(Long bookingId, Long itemId) throws MessageException {
+    public BookingResponse removeBookingItem(UUID bookingId, UUID itemId) throws MessageException {
         Booking booking = findWithItems(bookingId);
 
         if (booking.getStatus() == BookingStatus.COMPLETED
@@ -310,7 +310,7 @@ public class BookingService {
     }
 
     @Transactional
-    public BookingResponse updateBookingItemQty(Long bookingId, Long itemId, int newQty) throws MessageException {
+    public BookingResponse updateBookingItemQty(UUID bookingId, UUID itemId, int newQty) throws MessageException {
         Booking booking = findWithItems(bookingId);
 
         if (booking.getStatus() == BookingStatus.COMPLETED
@@ -368,7 +368,7 @@ public class BookingService {
     }
 
     @Transactional(readOnly = true)
-    public BookingResponse getById(Long id) throws MessageException {
+    public BookingResponse getById(UUID id) throws MessageException {
         return BookingResponse.from(findWithItems(id));
     }
 
@@ -443,7 +443,7 @@ public class BookingService {
     }
 
     @Transactional
-    public OrderResponse checkoutToOrder(Long bookingId, Long overrideTableId, String createdBy) throws MessageException {
+    public OrderResponse checkoutToOrder(UUID bookingId, UUID overrideTableId, String createdBy) throws MessageException {
         Booking booking = findWithItems(bookingId);
 
         if (booking.getStatus() != BookingStatus.CONFIRMED) {
@@ -582,7 +582,7 @@ public class BookingService {
         }
     }
 
-    private void checkTableConflict(Long tableId, Instant scheduledTime) throws MessageException {
+    private void checkTableConflict(UUID tableId, Instant scheduledTime) throws MessageException {
         Instant from = scheduledTime.minus(2, ChronoUnit.HOURS);
         Instant to = scheduledTime.plus(2, ChronoUnit.HOURS);
         List<Booking> conflicts = bookingRepository.findConflictingBookings(tableId, from, to);
@@ -740,7 +740,7 @@ public class BookingService {
                 .build();
     }
 
-    private double parseDouble(Object value, Long productId) throws MessageException {
+    private double parseDouble(Object value, UUID productId) throws MessageException {
         if (value == null) throw new MessageException("Không lấy được giá sản phẩm id: " + productId);
         if (value instanceof Number) return ((Number) value).doubleValue();
         try {
@@ -765,12 +765,12 @@ public class BookingService {
         return e.getMessage() != null ? e.getMessage() : "Lỗi không xác định";
     }
 
-    private Booking findById(Long id) throws MessageException {
+    private Booking findById(UUID id) throws MessageException {
         return bookingRepository.findById(id)
                 .orElseThrow(() -> new MessageException("Không tìm thấy booking với id: " + id));
     }
 
-    private Booking findWithItems(Long id) throws MessageException {
+    private Booking findWithItems(UUID id) throws MessageException {
         Booking b = bookingRepository.findById(id)
                 .orElseThrow(() -> new MessageException("Không tìm thấy booking với id: " + id));
         b.getItems().size(); // trigger lazy load trong transaction

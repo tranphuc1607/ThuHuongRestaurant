@@ -9,6 +9,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.util.List;
+import java.util.UUID;
 
 @Data
 public class OrderDeductionRequest {
@@ -24,7 +25,7 @@ public class OrderDeductionRequest {
     public static class OrderItem {
 
         @NotNull(message = "ID sản phẩm không được để trống")
-        private Long productId;
+        private UUID productId;
 
         @NotNull(message = "Số lượng không được để trống")
         @Min(value = 1, message = "Số lượng phải ít nhất là 1")

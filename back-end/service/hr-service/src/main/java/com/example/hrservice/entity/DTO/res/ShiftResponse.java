@@ -5,12 +5,13 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.time.LocalTime;
+import java.util.UUID;
 
 @Data
 @Builder
 public class ShiftResponse {
 
-    private Long id;
+    private UUID id;
     private String name;
     private LocalTime startTime;
     private LocalTime endTime;

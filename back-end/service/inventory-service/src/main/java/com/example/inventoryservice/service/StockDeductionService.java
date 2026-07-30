@@ -16,6 +16,7 @@ import com.example.inventoryservice.repository.UnitConversionRepository;
 import com.example.restaurant_common.util.exception.MessageException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import java.time.Instant;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -226,7 +228,7 @@ public class StockDeductionService {
     }
 
     @Transactional
-    public void deleteDeduction(Long id) throws MessageException {
+    public void deleteDeduction(UUID id) throws MessageException {
         StockDeduction deduction = deductionRepository.findById(id)
                 .orElseThrow(() -> new MessageException("Không tìm thấy phiếu xuất kho với id: " + id));
 
@@ -244,28 +246,9 @@ public class StockDeductionService {
     }
 
     @Transactional(readOnly = true)
-    public Page<StockDeductionResponse> getAll(int page, int size, Long ingredientId, DeductionReason reason) throws MessageException {
+    public Page<StockDeductionResponse> getAll(int page, int size, UUID ingredientId, DeductionReason reason, Instant from, Instant to) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-
-        if (ingredientId != null && reason != null) {
-            Ingredient ingredient = ingredientRepository.findById(ingredientId)
-                    .orElseThrow(() -> new MessageException("Không tìm thấy nguyên liệu với id: " + ingredientId));
-            return deductionRepository.findByIngredientAndReason(ingredient, reason, pageable)
-                    .map(StockDeductionResponse::from);
-        }
-
-        if (ingredientId != null) {
-            Ingredient ingredient = ingredientRepository.findById(ingredientId)
-                    .orElseThrow(() -> new MessageException("Không tìm thấy nguyên liệu với id: " + ingredientId));
-            return deductionRepository.findByIngredient(ingredient, pageable)
-                    .map(StockDeductionResponse::from);
-        }
-
-        if (reason != null) {
-            return deductionRepository.findByReason(reason, pageable)
-                    .map(StockDeductionResponse::from);
-        }
-
-        return deductionRepository.findAll(pageable).map(StockDeductionResponse::from);
+        return deductionRepository.findWithFilters(ingredientId, reason, from, to, pageable)
+                .map(StockDeductionResponse::from);
     }
 }

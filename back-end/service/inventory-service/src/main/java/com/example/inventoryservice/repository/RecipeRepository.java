@@ -7,14 +7,15 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.UUID;
 
 @Repository
-public interface RecipeRepository extends JpaRepository<Recipe, Long> {
+public interface RecipeRepository extends JpaRepository<Recipe, UUID> {
 
     @Query("SELECT r FROM Recipe r JOIN FETCH r.ingredient WHERE r.productId = :productId")
-    List<Recipe> findByProductId(@Param("productId") Long productId);
+    List<Recipe> findByProductId(@Param("productId") UUID productId);
 
-    boolean existsByProductIdAndIngredientId(Long productId, Long ingredientId);
+    boolean existsByProductIdAndIngredientId(UUID productId, UUID ingredientId);
 
-    void deleteByProductId(Long productId);
+    void deleteByProductId(UUID productId);
 }

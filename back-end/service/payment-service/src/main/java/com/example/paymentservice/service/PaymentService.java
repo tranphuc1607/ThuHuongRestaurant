@@ -35,6 +35,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -43,7 +44,7 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class PaymentService {
 
-    private static final Pattern PAYMENT_CODE_PATTERN = Pattern.compile("TH(\\d+)");
+    private static final Pattern PAYMENT_CODE_PATTERN = Pattern.compile("TH([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})");
     // Khớp "BOOKING BK-20260623-018", "BOOKING BK20260623018", hoặc chỉ "BK-20260623-018" (không có prefix)
     private static final Pattern BOOKING_CODE_PATTERN = Pattern.compile("(?:BOOKING\\s+)?(BK[- ]?\\d{8}[- ]?\\d+)", Pattern.CASE_INSENSITIVE);
 
@@ -72,22 +73,32 @@ public class PaymentService {
             throw new MessageException("Đơn hàng không ở trạng thái hợp lệ để thanh toán (hiện tại: " + orderStatus + ")");
         }
 
-        boolean hasActivePayment = paymentRepository
-                .findActiveNonRefundPayment(req.getOrderId(), List.of(PaymentStatus.PENDING, PaymentStatus.COMPLETED))
-                .isPresent();
-        if (hasActivePayment) {
-            throw new MessageException("Đơn hàng này đã có giao dịch thanh toán đang xử lý hoặc đã hoàn thành");
+        Double totalAmount = parseDouble(orderData.get("totalAmount"));
+        double prepaid     = orderData.get("prepaidAmount") instanceof Number n ? n.doubleValue() : 0.0;
+        double sumCompleted = paymentRepository.sumCompletedByOrderId(req.getOrderId());
+        double sumPending   = paymentRepository.sumPendingByOrderId(req.getOrderId());
+        double remaining    = totalAmount - prepaid - sumCompleted - sumPending;
+
+        if (remaining <= 0.5) {
+            throw new MessageException("Đơn hàng đã được thanh toán đủ");
         }
 
-        Double totalAmount = parseDouble(orderData.get("totalAmount"));
-        double prepaid = orderData.get("prepaidAmount") instanceof Number n ? n.doubleValue() : 0.0;
-        Double amount = Math.max(0.0, totalAmount - prepaid);
-        String tableName = String.valueOf(orderData.getOrDefault("tableName", ""));
+        double payAmount;
+        if (req.getAmount() != null && req.getAmount() > 0) {
+            if (req.getAmount() > remaining + 0.5) {
+                throw new MessageException(String.format("Số tiền vượt quá phần còn lại (%.0fđ)", remaining));
+            }
+            payAmount = req.getAmount();
+        } else {
+            payAmount = remaining;
+        }
+
+        String tableName   = String.valueOf(orderData.getOrDefault("tableName", ""));
         Integer tableNumber = orderData.get("tableNumber") instanceof Number n ? n.intValue() : null;
 
         Payment payment = Payment.builder()
                 .orderId(req.getOrderId())
-                .amount(amount)
+                .amount(payAmount)
                 .paymentMethod(req.getPaymentMethod())
                 .tableName(tableName)
                 .tableNumber(tableNumber)
@@ -101,7 +112,10 @@ public class PaymentService {
             payment.setPaidBy(createdBy);
             payment.setPaidAt(Instant.now());
             payment = paymentRepository.save(payment);
-            callCheckoutInternal(req.getOrderId(), createdBy);
+            double totalPaidNow = paymentRepository.sumCompletedByOrderId(req.getOrderId());
+            if (totalPaidNow >= totalAmount - prepaid - 0.5) {
+                callCheckoutInternal(req.getOrderId(), createdBy);
+            }
         } else if (req.getPaymentMethod() == PaymentMethod.CASH) {
             // CASH: để PENDING, admin phải xác nhận đã thu tiền thực tế
             payment = paymentRepository.save(payment);
@@ -109,7 +123,7 @@ public class PaymentService {
         } else {
             // BANK_TRANSFER: lưu trước để lấy ID, sau đó sinh VietQR URL
             payment = paymentRepository.save(payment);
-            String vietQrUrl = buildVietQrUrl(payment.getId(), amount);
+            String vietQrUrl = buildVietQrUrl(payment.getId(), payAmount);
             payment.setVietQrUrl(vietQrUrl);
             payment = paymentRepository.save(payment);
             telegramService.notify(buildBankTransferMessage(payment));
@@ -151,7 +165,7 @@ public class PaymentService {
             return Map.of("success", true);
         }
 
-        Long paymentId = Long.parseLong(matcher.group(1));
+        UUID paymentId = UUID.fromString(matcher.group(1));
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseGet(() -> {
                     log.warn("[Sepay] Không tìm thấy payment id={}", paymentId);
@@ -174,18 +188,24 @@ public class PaymentService {
             return Map.of("success", true);
         }
 
-        try {
-            callCheckoutInternal(payment.getOrderId(), "sepay-webhook");
-        } catch (MessageException e) {
-            log.error("[Sepay] Lỗi checkout đơn hàng {}: {}", payment.getOrderId(), e.getMessage());
-            return Map.of("success", true);
-        }
-
         payment.setStatus(PaymentStatus.COMPLETED);
         payment.setPaidAt(Instant.now());
         payment.setPaidBy("sepay-webhook");
         payment.setReferenceCode(payload.getReferenceCode());
         paymentRepository.save(payment);
+
+        // Chỉ checkout order khi đã đủ tiền (hỗ trợ split payment)
+        double totalPaidNow = paymentRepository.sumCompletedByOrderId(payment.getOrderId());
+        try {
+            Map<String, Object> orderData = fetchOrderData(payment.getOrderId());
+            double totalAmount = parseDouble(orderData.get("totalAmount"));
+            double prepaid = orderData.get("prepaidAmount") instanceof Number n ? n.doubleValue() : 0.0;
+            if (totalPaidNow >= totalAmount - prepaid - 0.5) {
+                callCheckoutInternal(payment.getOrderId(), "sepay-webhook");
+            }
+        } catch (Exception e) {
+            log.error("[Sepay] Lỗi checkout đơn hàng {}: {}", payment.getOrderId(), e.getMessage());
+        }
 
         telegramService.notify(buildPaymentCompletedMessage(payment, payload.getTransferAmount()));
         log.info("[Sepay] Payment id={}, orderId={} xác nhận thành công. Số tiền: {}", paymentId, payment.getOrderId(), payload.getTransferAmount());
@@ -193,7 +213,7 @@ public class PaymentService {
     }
 
     @Transactional
-    public PaymentResponse confirmPayment(Long paymentId, String confirmedBy) throws MessageException {
+    public PaymentResponse confirmPayment(UUID paymentId, String confirmedBy) throws MessageException {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new MessageException("Không tìm thấy giao dịch với id: " + paymentId));
 
@@ -201,26 +221,37 @@ public class PaymentService {
             throw new MessageException("Chỉ có thể xác nhận giao dịch ở trạng thái PENDING");
         }
 
-        callCheckoutInternal(payment.getOrderId(), confirmedBy);
-
         payment.setStatus(PaymentStatus.COMPLETED);
         payment.setPaidAt(Instant.now());
         payment.setPaidBy(confirmedBy);
         paymentRepository.save(payment);
+
+        // Chỉ checkout order khi tổng đã thanh toán đủ (hỗ trợ split payment)
+        double totalPaidNow = paymentRepository.sumCompletedByOrderId(payment.getOrderId());
+        try {
+            Map<String, Object> orderData = fetchOrderData(payment.getOrderId());
+            double totalAmount = parseDouble(orderData.get("totalAmount"));
+            double prepaid = orderData.get("prepaidAmount") instanceof Number n ? n.doubleValue() : 0.0;
+            if (totalPaidNow >= totalAmount - prepaid - 0.5) {
+                callCheckoutInternal(payment.getOrderId(), confirmedBy);
+            }
+        } catch (Exception e) {
+            log.warn("[confirmPayment] Không lấy được thông tin đơn hàng {} để kiểm tra: {}", payment.getOrderId(), e.getMessage());
+        }
 
         telegramService.notify(buildPaymentCompletedMessage(payment, payment.getAmount()));
         return PaymentResponse.from(payment);
     }
 
     @Transactional(readOnly = true)
-    public PaymentResponse getById(Long paymentId) throws MessageException {
+    public PaymentResponse getById(UUID paymentId) throws MessageException {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new MessageException("Không tìm thấy giao dịch với id: " + paymentId));
         return PaymentResponse.from(payment);
     }
 
     @Transactional
-    public PaymentResponse processRefund(Long orderId, Double amount, String note, String refundedBy) throws MessageException {
+    public PaymentResponse processRefund(UUID orderId, Double amount, String note, String refundedBy) throws MessageException {
         Map<String, Object> orderData = fetchOrderData(orderId);
 
         String orderStatus = String.valueOf(orderData.get("status"));
@@ -266,7 +297,7 @@ public class PaymentService {
             }
         }
 
-        String msg = String.format("💰 Đã hoàn %,.0fđ cho khách — Đơn #%d%s (NV: %s)",
+        String msg = String.format("💰 Đã hoàn %,.0fđ cho khách — Đơn #%s%s (NV: %s)",
                 refundAmount, orderId,
                 tableNumber != null ? " · Bàn " + tableNumber : "",
                 refundedBy);
@@ -276,13 +307,13 @@ public class PaymentService {
     }
 
     @Transactional(readOnly = true)
-    public List<PaymentResponse> getAllByOrderId(Long orderId) {
+    public List<PaymentResponse> getAllByOrderId(UUID orderId) {
         return paymentRepository.findAllByOrderIdOrderByCreatedAtDesc(orderId)
                 .stream().map(PaymentResponse::from).toList();
     }
 
     @Transactional(readOnly = true)
-    public PaymentResponse getByOrderId(Long orderId) throws MessageException {
+    public PaymentResponse getByOrderId(UUID orderId) throws MessageException {
         // Ưu tiên trả payment không phải REFUND (giao dịch thu tiền chính)
         // Nếu chỉ có REFUND payment, trả về REFUND
         List<Payment> all = paymentRepository.findAllByOrderIdOrderByCreatedAtDesc(orderId);
@@ -297,8 +328,20 @@ public class PaymentService {
     }
 
     @Transactional(readOnly = true)
-    public Page<PaymentResponse> getAll(int page, int size, PaymentStatus status, PaymentMethod method) {
+    public Page<PaymentResponse> getAll(int page, int size, PaymentStatus status, PaymentMethod method, Instant from, Instant to) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        if (from != null && to != null) {
+            if (status != null && method != null) {
+                return paymentRepository.findByStatusAndPaymentMethodAndCreatedAtBetween(status, method, from, to, pageable).map(PaymentResponse::from);
+            }
+            if (status != null) {
+                return paymentRepository.findByStatusAndCreatedAtBetween(status, from, to, pageable).map(PaymentResponse::from);
+            }
+            if (method != null) {
+                return paymentRepository.findByPaymentMethodAndCreatedAtBetween(method, from, to, pageable).map(PaymentResponse::from);
+            }
+            return paymentRepository.findByCreatedAtBetween(from, to, pageable).map(PaymentResponse::from);
+        }
         if (status != null && method != null) {
             return paymentRepository.findByStatusAndPaymentMethod(status, method, pageable).map(PaymentResponse::from);
         }
@@ -312,7 +355,28 @@ public class PaymentService {
     }
 
     @Transactional
-    public PaymentResponse changePaymentMethod(Long paymentId, PaymentMethod newMethod) throws MessageException {
+    public PaymentResponse updateAmount(UUID paymentId, Double newAmount) throws MessageException {
+        Payment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new MessageException("Không tìm thấy giao dịch #" + paymentId));
+
+        if (payment.getStatus() != PaymentStatus.PENDING) {
+            throw new MessageException("Chỉ có thể cập nhật giá khi giao dịch đang chờ xác nhận");
+        }
+
+        if (newAmount == null || newAmount < 0) {
+            throw new MessageException("Số tiền không hợp lệ");
+        }
+
+        payment.setAmount(newAmount);
+        if (payment.getPaymentMethod() == PaymentMethod.BANK_TRANSFER) {
+            payment.setVietQrUrl(buildVietQrUrl(payment.getId(), newAmount));
+        }
+
+        return PaymentResponse.from(paymentRepository.save(payment));
+    }
+
+    @Transactional
+    public PaymentResponse changePaymentMethod(UUID paymentId, PaymentMethod newMethod) throws MessageException {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new MessageException("Không tìm thấy giao dịch #" + paymentId));
 
@@ -481,7 +545,7 @@ public class PaymentService {
             throw new MessageException("Đơn hàng không ở trạng thái hợp lệ để thanh toán");
         }
 
-        Long orderId = orderData.get("id") instanceof Number n ? n.longValue() : null;
+        UUID orderId = orderData.get("id") instanceof String s ? UUID.fromString(s) : null;
         if (orderId == null) throw new MessageException("Không lấy được ID đơn hàng");
 
         boolean hasActivePayment = paymentRepository
@@ -521,7 +585,7 @@ public class PaymentService {
     }
 
     @Transactional(readOnly = true)
-    public Map<String, String> getPaymentStatus(Long paymentId) throws MessageException {
+    public Map<String, String> getPaymentStatus(UUID paymentId) throws MessageException {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new MessageException("Không tìm thấy giao dịch"));
         return Map.of("status", payment.getStatus().name());
@@ -530,7 +594,7 @@ public class PaymentService {
     // ── private helpers ──────────────────────────────────────────────────────
 
     @SuppressWarnings("unchecked")
-    private Map<String, Object> fetchOrderData(Long orderId) throws MessageException {
+    private Map<String, Object> fetchOrderData(UUID orderId) throws MessageException {
         Map<String, Object> response;
         try {
             response = orderServiceClient.getOrder(orderId);
@@ -544,7 +608,7 @@ public class PaymentService {
         throw new MessageException("Không lấy được thông tin đơn hàng id: " + orderId);
     }
 
-    private void callCheckoutInternal(Long orderId, String paidBy) throws MessageException {
+    private void callCheckoutInternal(UUID orderId, String paidBy) throws MessageException {
         try {
             orderServiceClient.checkoutInternal(orderId, Map.of("paidBy", paidBy));
         } catch (Exception e) {
@@ -552,7 +616,7 @@ public class PaymentService {
         }
     }
 
-    private String buildVietQrUrl(Long paymentId, Double amount) {
+    private String buildVietQrUrl(UUID paymentId, Double amount) {
         String content = "TH" + paymentId;
         return String.format(
                 "https://img.vietqr.io/image/%s-%s-compact2.png?amount=%d&addInfo=%s&accountName=%s",
@@ -573,7 +637,7 @@ public class PaymentService {
 
     private String buildCashPendingMessage(Payment p) {
         return String.format(
-                "🔔 <b>%s</b> — Yêu cầu thanh toán tiền mặt\n💰 Số tiền: <b>%s đ</b>\n📋 Mã giao dịch: #%d\n\n⚠️ Admin cần xác nhận sau khi thu tiền!\n👉 PATCH /api/v1/payments/%d/confirm",
+                "🔔 <b>%s</b> — Yêu cầu thanh toán tiền mặt\n💰 Số tiền: <b>%s đ</b>\n📋 Mã giao dịch: #%s\n\n⚠️ Admin cần xác nhận sau khi thu tiền!\n👉 PATCH /api/v1/payments/%s/confirm",
                 p.getTableName(), formatAmount(p.getAmount()), p.getId(), p.getId());
     }
 
@@ -613,7 +677,7 @@ public class PaymentService {
 
     private String buildCustomerCashMessage(Payment p) {
         return String.format(
-                "🔔 <b>%s</b> — Khách gọi thu tiền mặt!\n💰 Số tiền: <b>%s đ</b>\n\n⚠️ Ra bàn thu tiền rồi xác nhận!\n👉 PATCH /api/v1/payments/%d/confirm",
+                "🔔 <b>%s</b> — Khách gọi thu tiền mặt!\n💰 Số tiền: <b>%s đ</b>\n\n⚠️ Ra bàn thu tiền rồi xác nhận!\n👉 PATCH /api/v1/payments/%s/confirm",
                 p.getTableName(), formatAmount(p.getAmount()), p.getId());
     }
 

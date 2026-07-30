@@ -7,13 +7,14 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Data
 @Builder
 public class PaymentResponse {
 
-    private Long id;
-    private Long orderId;
+    private UUID id;
+    private UUID orderId;
     private Double amount;
     private PaymentMethod paymentMethod;
     private PaymentStatus status;

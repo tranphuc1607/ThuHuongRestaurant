@@ -5,6 +5,8 @@ import com.example.restaurant_common.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.util.UUID;
+
 @Entity
 @Table(name = "stock_deductions", indexes = {
         @Index(name = "idx_deduction_ingredient_id", columnList = "ingredient_id"),
@@ -15,8 +17,8 @@ import lombok.*;
 public class StockDeduction extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ingredient_id", nullable = false)

@@ -5,11 +5,13 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.util.UUID;
+
 @Data
 public class AddOrderItemRequest {
 
     @NotNull(message = "ID sản phẩm không được để trống")
-    private Long productId;
+    private UUID productId;
 
     @NotNull(message = "Số lượng không được để trống")
     @Min(value = 1, message = "Số lượng phải lớn hơn 0")
@@ -17,4 +19,6 @@ public class AddOrderItemRequest {
 
     @NotBlank(message = "Đơn vị bán không được để trống")
     private String saleUnit;
+
+    private boolean skipInventoryDeduction = false;
 }

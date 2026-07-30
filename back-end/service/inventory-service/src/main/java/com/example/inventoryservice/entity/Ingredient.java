@@ -10,6 +10,8 @@ import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 
+import java.util.UUID;
+
 @Entity
 @Table(name = "ingredients", indexes = {
     @Index(name = "idx_ingredient_category", columnList = "category"),
@@ -26,8 +28,8 @@ import org.hibernate.annotations.SQLRestriction;
 public class Ingredient extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @Column(nullable = false, length = 200)
     private String name;

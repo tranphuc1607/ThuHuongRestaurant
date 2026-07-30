@@ -6,14 +6,15 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Data
 @Builder
 public class RecipeResponse {
 
-    private Long id;
-    private Long productId;
-    private Long ingredientId;
+    private UUID id;
+    private UUID productId;
+    private UUID ingredientId;
     private String ingredientName;
     private BaseUnit ingredientBaseUnit;
     private Double amountRequired;

@@ -10,6 +10,7 @@ import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
 @Table(name = "payments", indexes = {
@@ -28,11 +29,11 @@ import java.time.Instant;
 public class Payment extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
-    @Column(name = "order_id", nullable = false)
-    private Long orderId;
+    @Column(name = "order_id", nullable = false, columnDefinition = "BINARY(16)")
+    private UUID orderId;
 
     @Column(name = "amount", nullable = false)
     private Double amount;

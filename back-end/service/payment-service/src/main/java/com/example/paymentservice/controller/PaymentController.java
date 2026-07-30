@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Slf4j
 @RestController
@@ -46,10 +47,19 @@ public class PaymentController {
         return ResponseEntity.ok(paymentService.createPayment(req, jwt.getSubject()));
     }
 
+    @PatchMapping("/{id}/amount")
+    @PreAuthorize("hasAuthority('ROLE_EMPLOYEE') or hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<PaymentResponse> updateAmount(
+            @PathVariable UUID id,
+            @RequestBody Map<String, Object> body) throws MessageException {
+        Double newAmount = body.get("newAmount") instanceof Number n ? n.doubleValue() : null;
+        return ResponseEntity.ok(paymentService.updateAmount(id, newAmount));
+    }
+
     @PatchMapping("/{id}/change-method")
     @PreAuthorize("hasAuthority('ROLE_EMPLOYEE') or hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<PaymentResponse> changePaymentMethod(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @RequestBody @Valid ChangePaymentMethodRequest req) throws MessageException {
         return ResponseEntity.ok(paymentService.changePaymentMethod(id, req.getNewMethod()));
     }
@@ -57,33 +67,33 @@ public class PaymentController {
     @PatchMapping("/{id}/confirm")
     @PreAuthorize("hasAuthority('ROLE_EMPLOYEE') or hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<PaymentResponse> confirmPayment(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @AuthenticationPrincipal Jwt jwt) throws MessageException {
         return ResponseEntity.ok(paymentService.confirmPayment(id, jwt.getSubject()));
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('ROLE_EMPLOYEE') or hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<PaymentResponse> getById(@PathVariable Long id) throws MessageException {
+    public ResponseEntity<PaymentResponse> getById(@PathVariable UUID id) throws MessageException {
         return ResponseEntity.ok(paymentService.getById(id));
     }
 
     @GetMapping("/orders/{orderId}")
     @PreAuthorize("hasAuthority('ROLE_EMPLOYEE') or hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<PaymentResponse> getByOrderId(@PathVariable Long orderId) throws MessageException {
+    public ResponseEntity<PaymentResponse> getByOrderId(@PathVariable UUID orderId) throws MessageException {
         return ResponseEntity.ok(paymentService.getByOrderId(orderId));
     }
 
     @GetMapping("/orders/{orderId}/all")
     @PreAuthorize("hasAuthority('ROLE_EMPLOYEE') or hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<List<PaymentResponse>> getAllByOrderId(@PathVariable Long orderId) {
+    public ResponseEntity<List<PaymentResponse>> getAllByOrderId(@PathVariable UUID orderId) {
         return ResponseEntity.ok(paymentService.getAllByOrderId(orderId));
     }
 
     @PostMapping("/orders/{orderId}/refund")
     @PreAuthorize("hasAuthority('ROLE_EMPLOYEE') or hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<PaymentResponse> processRefund(
-            @PathVariable Long orderId,
+            @PathVariable UUID orderId,
             @RequestBody(required = false) Map<String, Object> body,
             @AuthenticationPrincipal Jwt jwt) throws MessageException {
         Double amount = body != null && body.get("amount") instanceof Number n ? n.doubleValue() : null;
@@ -97,8 +107,12 @@ public class PaymentController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) PaymentStatus status,
-            @RequestParam(required = false) PaymentMethod method) {
-        return ResponseEntity.ok(paymentService.getAll(page, size, status, method));
+            @RequestParam(required = false) PaymentMethod method,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to) {
+        Instant fromInstant = from != null && !from.isBlank() ? Instant.parse(from) : null;
+        Instant toInstant   = to   != null && !to.isBlank()   ? Instant.parse(to)   : null;
+        return ResponseEntity.ok(paymentService.getAll(page, size, status, method, fromInstant, toInstant));
     }
 
     @GetMapping("/today")
@@ -136,7 +150,7 @@ public class PaymentController {
 
     @GetMapping("/customer-status/{paymentId}")
     public ResponseEntity<Map<String, String>> getCustomerStatus(
-            @PathVariable Long paymentId) throws MessageException {
+            @PathVariable UUID paymentId) throws MessageException {
         return ResponseEntity.ok(paymentService.getPaymentStatus(paymentId));
     }
 

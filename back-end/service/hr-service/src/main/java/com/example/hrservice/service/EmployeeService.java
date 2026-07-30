@@ -2,16 +2,23 @@ package com.example.hrservice.service;
 
 import com.example.hrservice.entity.Employee;
 import com.example.hrservice.entity.DTO.req.CreateEmployeeRequest;
+import com.example.hrservice.entity.DTO.req.SaveFaceDescriptorRequest;
 import com.example.hrservice.entity.DTO.res.EmployeeResponse;
+import com.example.hrservice.entity.DTO.res.FaceDescriptorEntry;
 import com.example.hrservice.repository.EmployeeRepository;
 import com.example.restaurant_common.util.exception.MessageException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -28,7 +35,7 @@ public class EmployeeService {
         return employeeRepository.findByActiveTrue(PageRequest.of(page, size)).map(EmployeeResponse::from);
     }
 
-    public EmployeeResponse getById(Long id) throws MessageException {
+    public EmployeeResponse getById(UUID id) throws MessageException {
         return EmployeeResponse.from(findById(id));
     }
 
@@ -64,7 +71,7 @@ public class EmployeeService {
         return EmployeeResponse.from(employeeRepository.save(employee));
     }
 
-    public EmployeeResponse findByUserId(Long userId) throws MessageException {
+    public EmployeeResponse findByUserId(UUID userId) throws MessageException {
         return EmployeeResponse.from(
                 employeeRepository.findByUserId(userId)
                         .orElseThrow(() -> new MessageException("Chưa có hồ sơ nhân viên HR cho user này"))
@@ -72,7 +79,7 @@ public class EmployeeService {
     }
 
     @Transactional
-    public EmployeeResponse update(Long id, CreateEmployeeRequest req) throws MessageException {
+    public EmployeeResponse update(UUID id, CreateEmployeeRequest req) throws MessageException {
         Employee employee = findById(id);
         employee.setName(req.getName());
         employee.setPhone(req.getPhone());
@@ -84,14 +91,14 @@ public class EmployeeService {
     }
 
     @Transactional
-    public EmployeeResponse deactivate(Long id) throws MessageException {
+    public EmployeeResponse deactivate(UUID id) throws MessageException {
         Employee employee = findById(id);
         employee.setActive(false);
         return EmployeeResponse.from(employeeRepository.save(employee));
     }
 
     @Transactional
-    public EmployeeResponse activate(Long id) throws MessageException {
+    public EmployeeResponse activate(UUID id) throws MessageException {
         Employee employee = findById(id);
         employee.setActive(true);
         return EmployeeResponse.from(employeeRepository.save(employee));
@@ -110,7 +117,7 @@ public class EmployeeService {
     }
 
     @Transactional
-    public EmployeeResponse linkTelegramById(Long employeeId, Long telegramId) throws MessageException {
+    public EmployeeResponse linkTelegramById(UUID employeeId, Long telegramId) throws MessageException {
         Employee employee = findById(employeeId);
         Employee existing = employeeRepository.findByTelegramId(telegramId).orElse(null);
         if (existing != null && !existing.getId().equals(employeeId)) {
@@ -120,7 +127,7 @@ public class EmployeeService {
         return EmployeeResponse.from(employeeRepository.save(employee));
     }
 
-    public Employee findById(Long id) throws MessageException {
+    public Employee findById(UUID id) throws MessageException {
         return employeeRepository.findById(id)
                 .orElseThrow(() -> new MessageException("Không tìm thấy nhân viên với ID: " + id));
     }
@@ -128,5 +135,41 @@ public class EmployeeService {
     public Employee findByTelegramId(Long telegramId) throws MessageException {
         return employeeRepository.findByTelegramId(telegramId)
                 .orElseThrow(() -> new MessageException("Chưa đăng ký tài khoản. Vui lòng gõ /register"));
+    }
+
+    @Transactional
+    public void saveFaceDescriptor(UUID id, SaveFaceDescriptorRequest req) throws MessageException {
+        if (req.getDescriptor() == null || req.getDescriptor().size() != 128) {
+            throw new MessageException("Dữ liệu khuôn mặt không hợp lệ (cần đúng 128 chiều)");
+        }
+        Employee emp = findById(id);
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            emp.setFaceDescriptor(mapper.writeValueAsString(req.getDescriptor()));
+        } catch (Exception e) {
+            throw new MessageException("Lỗi khi lưu dữ liệu khuôn mặt");
+        }
+        employeeRepository.save(emp);
+    }
+
+    public List<FaceDescriptorEntry> listFaceDescriptors() {
+        ObjectMapper mapper = new ObjectMapper();
+        return employeeRepository.findAllWithFaceDescriptor().stream()
+                .map(emp -> {
+                    try {
+                        List<Double> desc = mapper.readValue(
+                                emp.getFaceDescriptor(),
+                                mapper.getTypeFactory().constructCollectionType(List.class, Double.class));
+                        return FaceDescriptorEntry.builder()
+                                .employeeId(emp.getId())
+                                .name(emp.getName())
+                                .descriptor(desc)
+                                .build();
+                    } catch (Exception e) {
+                        return null;
+                    }
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
     }
 }

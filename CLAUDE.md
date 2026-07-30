@@ -562,6 +562,91 @@ Conflict check: trong vòng ±2 giờ quanh `scheduledTime`, bàn đó không đ
 
 ---
 
+## Quét hóa đơn (Receipt Scan — AI vision)
+
+Nhân viên chụp/tải ảnh hóa đơn viết tay → AI đọc và khớp với sản phẩm thật trong DB → nhân viên review/sửa → xác nhận thêm vào order.
+
+**Hai implementation song song, không share code:**
+- **Web** (`front-end/src/app/employee/quet-hoa-don/page.tsx`): gọi Next.js API route riêng `src/app/api/scan-invoice/route.ts` (server-side, giữ `OPENROUTER_API_KEY` bí mật khỏi browser).
+- **Mobile** (`D:\thuhuong-restaurantmobile`, tab "Quét HĐ"): không có lớp Next.js tương đương, nên gọi thẳng endpoint Spring Boot `POST /api/v1/orders/scan-receipt` (order-service, xem `ReceiptScanService.java`). Endpoint này chỉ phân tích ảnh — KHÔNG tạo order/item; client tự gọi `POST /orders` + `POST /orders/{id}/items` (với `skipInventoryDeduction=true`) sau khi nhân viên xác nhận.
+
+**Hóa đơn nhiều tờ:** `POST /orders/scan-receipt` nhận `imagesBase64` (List, tối đa 10 ảnh) — viết hết tờ này sang tờ khác thì chụp nhiều ảnh, tất cả được gửi trong CÙNG một request tới AI kèm hướng dẫn coi các ảnh là các tờ nối tiếp của một hóa đơn duy nhất, gộp thành một danh sách món chung. App mobile tích lũy ảnh (nút "Chụp thêm" / chọn nhiều ảnh từ thư viện), hiển thị thumbnail có số trang, xóa được từng trang trước khi phân tích.
+
+### Cấu trúc mẫu hóa đơn thật (bắt buộc đọc trước khi sửa prompt)
+
+```
+NHÀ HÀNG THU HƯƠNG          NHẬN ĐẶT TIỆC, LIÊN HOAN, HỘI NGHỊ
+Đ/c: Số 60TT6.3 ...          ĐT/Zalo: 0974.516.229     ← chữ IN, KHÔNG phải dữ liệu
+[QR] Số TK: 8838445399 · Ngân hàng: BIDV               ← chữ IN, dễ bị đọc nhầm thành tiền
+              HOÁ ĐƠN THANH TOÁN
+Tên khách hàng: ......        Bàn số: ......
+Địa chỉ: ......               ĐT: ......
+┌──────┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┐
+│ Bia  │  │  │  │  │  │  │  │  │  │  │   ← HÀNG BIA: mỗi ô = MỘT đợt khách gọi
+├──────┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤
+│      │  │  │  │  │  │  │  │  │  │  │
+└──────┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┘
+STT | Tên hàng | SL | ĐVT | Đơn giá | Thành tiền   (10 dòng in sẵn)
+                              TỔNG CỘNG | ......
+Thành tiền (viết bằng chữ): ......
+```
+
+**Hàng "Bia" là đặc thù quan trọng nhất**: nhân viên ghi số cốc vào **một ô mới mỗi lần** khách gọi thêm, nên `[4, 6, 2]` = ba đợt chứ **không phải** một đợt 12 cốc. Prompt yêu cầu trả `beerCells` là mảng, đọc trái→phải, dãy trên trước, bỏ ô trống, **cấm cộng gộp**. Backend map sang `beerRounds` trong `ReceiptScanResponse` kèm `beerProductId/beerProductName/beerUnitPrice`; app tạo **một `POST /orders/{id}/items` cho mỗi ô** ⇒ mỗi ô thành một đợt riêng trong chi tiết đơn (xem mục Bia Cốc ở màn hình chi tiết đơn).
+
+**Số in sẵn dễ bị nhầm thành dữ liệu**: `0974.516.229` (điện thoại, dấu chấm y hệt cách ghi tiền), `8838445399` (số TK), `60TT6.3` (địa chỉ). Prompt liệt kê đích danh để model bỏ qua.
+
+**Đối chiếu TỔNG CỘNG**: không rõ nhân viên có cộng tiền bia vào tổng hay không, nên chỉ cảnh báo khi lệch với **cả hai** cách tính (có bia / không bia) — tránh cảnh báo sai ở mọi hóa đơn có bia, riết rồi nhân viên bỏ qua cảnh báo thật.
+
+### Kiến trúc (đã nâng cấp — trước đây dùng `openrouter/auto` không tham số)
+
+Cấu trúc bảng cột cố định cho 3 tín hiệu mạnh mà OCR giấy trắng không có — toàn bộ thiết kế khai thác chúng:
+
+| Tầng | File | Vai trò |
+|------|------|---------|
+| Transport | `service/vision/GeminiVisionClient.java` | Gọi Gemini `generateContent`, `temperature=0`, **structured output gốc** (`responseMimeType` + `responseSchema`) nên không cần dò dấu ngoặc trong text. Log model đã dùng + nội dung thô khi lỗi. |
+| Nghiệp vụ | `service/ReceiptScanService.java` | Danh mục dạng **số thứ tự** (AI trả `1..18`, không phải UUID 36 ký tự → xóa hẳn lớp lỗi chép sai UUID), prompt bám bảng, hợp nhất độ tin cậy |
+| Khớp tên | `util/VietnameseTextMatcher.java` | NFD + xóa dấu tổ hợp (bền hơn regex từng ký tự), token-set, viết tắt chữ đầu, chấm cả trên `description` |
+| Học dần | `entity/ReceiptScanAlias.java` | Bí danh (chữ viết tay → món) học từ xác nhận của nhân viên |
+
+**Ba cơ chế chống sai âm thầm** (điểm quan trọng nhất):
+1. **Khớp theo giá** — 18 món giá gần như không trùng nên `Đơn giá` là khóa định danh gần như duy nhất. Tên nhòe vẫn khớp đúng (đã kiểm chứng: "C.ga sot t.ot" → "Cánh gà chiên sốt tỏi ớt" nhờ giá 65.000).
+2. **Kiểm tra số học** — `SL × Đơn giá = Thành tiền` từng dòng và `Σ = TỔNG CỘNG` toàn cục. Lệch → **hạ xuống `low`** bất kể AI tự tin thế nào. Tất định, bắt được lỗi AI không tự biết.
+3. **Suy ra số bị nhòe** — có `Thành tiền` + giá món ⇒ suy ra `SL` (kèm cảnh báo, hạ về `low`).
+
+**Luôn lấy `saleUnit` từ DB của món đã khớp**, không bao giờ dùng giá trị AI đoán (`rawUnit` chỉ để tham chiếu). Trước đây AI đoán đơn vị gây sai lệch âm thầm với `Bia Cốc` (CUP) và mọi món ghi "đĩa"/"tô".
+
+### Thời gian phân tích (đã đo, 2026-07-30)
+
+Tổng từ lúc bấm "Phân tích" tới khi hiện kết quả: **~3,2 giây** với ảnh 12MP một trang.
+
+| Chặng | Thời gian | Ghi chú |
+|---|---|---|
+| Xử lý ảnh + upload + gateway | ~0,8s | Ảnh được **mã hóa sẵn ngay khi chụp**, không đợi tới lúc bấm Phân tích |
+| Gọi Gemini | ~2,4s | Chiếm gần như toàn bộ |
+| Tải danh mục + bí danh | ~20ms | Không đáng kể, đừng phí công tối ưu |
+
+**Núm chỉnh tốc độ duy nhất đáng kể là model** (`GEMINI_MODEL` trong `.env`, đổi không cần build lại):
+`gemini-3.5-flash-lite` ~2,4s ← mặc định · `gemini-3.6-flash` ~7,2s. Cả hai cho kết quả giống nhau trên toàn bộ ca thử hiện có (kể cả ca bẫy sai phép tính / món ngoài menu / tên viết tắt), nhưng **chưa thử trên chữ viết tay thật** — nếu đọc sai nhiều thì đổi về `gemini-3.6-flash`.
+
+`gemini.thinking-budget` (mặc định 128) chỉ là **van an toàn**: khi có `responseSchema`, model gần như không "suy nghĩ" (đo được `thoughts=0`), nên siết lại không giúp nhanh thêm. Nó chỉ chặn trường hợp prompt/model đổi làm số token suy nghĩ phình lên (không schema thì đo được 3173 thoughts cho 109 token trả lời — chậm gấp 5 lần). Log `[ReceiptScan] Gemini ... ms — prompt=N thoughts=N output=N` để theo dõi.
+
+**Cấu hình:**
+- `gemini.api.key=${GEMINI_API_KEY:}`, `gemini.model=${GEMINI_MODEL:gemini-3.5-flash-lite}`, `gemini.thinking-budget=${GEMINI_THINKING_BUDGET:128}` trong `order-service/application.properties`; env var qua `docker-compose.yml` + `back-end/.env` (KHÔNG phải GitHub config repo — giống pattern Telegram bot token).
+- **Model để trong config, không hardcode** vì Google đổi model/quota free không báo trước. Đổi model chỉ cần sửa `.env` + `docker compose up -d order-service`.
+- Quota free: Gemini ~100–250 lượt/ngày (Pro/Flash), 5–10 lượt/phút. Một lần quét nhiều trang = **một** request. Giới hạn 20MB/request cho ảnh inline.
+- `OPENROUTER_API_KEY` giữ lại làm đường lui (web vẫn dùng route Next.js riêng — xem cảnh báo trôi dạt bên dưới).
+- Thiếu key → lỗi rõ ràng "Chưa cấu hình Gemini API key trên server", không crash.
+
+**Học từ nhân viên:** `POST /orders/scan-receipt/feedback` (body `{items:[{rawText, productId}]}`) ghi cặp chữ-viết-tay → món vào bảng `receipt_scan_aliases`. Bí danh được nạp vào **cả prompt lẫn bộ chấm điểm**, nên hệ thống học dần lối viết tắt riêng của nhân viên. App gửi tự động khi submit, chỉ với dòng có `rawText` khác tên món (dòng trùng khít thì không có gì để học). Đã kiểm chứng: dạy "cgsto" → quét lại khớp đúng ở mức `high` **dù không ghi giá**.
+
+**Bộ đo độ chính xác:** `back-end/service/order-service/eval/Run-ReceiptScanEval.ps1` — xem `eval/README.md`. Hai chỉ số: *tự động đúng* (≥95%) và *độ chuẩn nhóm tự tin* (≥99%). Dòng "Cần xác nhận" KHÔNG tính là lỗi; lỗi đáng lo là "sai âm thầm".
+
+**`skipInventoryDeduction=true`** khi thêm item từ quét hóa đơn — món đã được phục vụ trước khi ghi vào hệ thống, trừ kho lại sẽ bị double-count. Set `OrderItem.inventoryDeducted=false`, và `cancelOrder`/`removeItem`/`updateItemQty` đều phải tôn trọng flag này khi hoàn kho (xem Known Pitfalls).
+
+> **Cảnh báo trôi dạt:** vẫn còn **hai bản pipeline** — bản Java này (mobile, đã nâng cấp) và `front-end/src/app/api/scan-invoice/route.ts` (web, vẫn `openrouter/auto`, một ảnh, và có bug: hỏi model `productId` dạng **số** trong khi catalog dùng UUID). Nên trỏ web sang endpoint Java rồi xóa route Next.js.
+
+---
+
 ## Inter-Service Communication (Feign)
 
 | Caller | Target | Mục đích |
@@ -708,6 +793,13 @@ Error:
 | Next.js Server Component fetch "không tìm thấy" dù API trả 200 | `NEXT_PUBLIC_API_URL=/api/v1` là relative URL → Node.js `fetch()` throws `TypeError: Invalid URL`, bị silent `catch { return null; }` | Trong Server Component dùng: `process.env.BACKEND_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api/v1"` |
 | Next.js source thay đổi nhưng browser vẫn chạy code cũ | `.next/` cache phục vụ bundle đã compile cũ dù source đã sửa — HMR không rebuild đúng trong một số trường hợp | Xóa `.next/` và restart: `cd front-end && rm -rf .next && npm run dev` |
 | Buttons hoạt động trong DevTools nhưng không bấm được trên điện thoại thật | (1) Next.js 15 thiếu `viewport` export. (2) Thiếu `touch-action: manipulation` + `cursor: pointer` CSS. (3) iOS Safari: `onClick` không fire trên `sticky` elements hoặc khi touch→click conversion bị block. (4) Tap target < 44px | **Pattern chuẩn cho button mobile-critical**: thêm `onPointerDown={(e) => { if (e.pointerType === "touch") { e.preventDefault(); fn(); } }}` + giữ `onClick={fn}` cho desktop. `e.preventDefault()` trên touch pointerdown ngăn browser generate compat click event (không double-fire). Áp dụng cho: hamburger, slider arrows, cart buttons. CSS: `viewport` export, `touch-action: manipulation`, `cursor: pointer`, `-webkit-tap-highlight-color: transparent` |
+| UUID migration: Telegram bot callback handlers còn dùng `Long.parseLong()` | Bot callback data nhúng entity ID (`CONFIRM_BOOKING:{id}`) — sau UUID migration, `id` là UUID string, `Long.parseLong()` throws NumberFormatException | Đổi `Long id = Long.parseLong(parts[N])` → `UUID id = UUID.fromString(parts[N])` trong mọi `handleXxx` method của bot. Cập nhật method signature từ `Long bookingId` → `UUID bookingId`. Agent tự động sẽ bỏ sót các file bot — phải kiểm tra thủ công |
+| UUID migration: Feign DTO nested class `productId` còn `Long` | Agent chỉ đổi entity và service — DTO dùng bởi Feign như `OrderDeductionPayload.OrderItem.productId` giữ nguyên `Long`. Build fails với type mismatch | Sau UUID migration, cần kiểm tra thủ công tất cả Feign payload DTO trong `client/dto/`. Đổi `Long productId` → `UUID productId` + thêm `import java.util.UUID` |
+| UUID migration: `CheckinTokenUtil` nhận `Long employeeId, Long shiftId` | `HRTelegramBot` gọi `generateVerifyUrl(employee.getId(), ...)` — sau UUID migration `getId()` trả UUID nhưng method vẫn nhận Long | Đổi signature: `generateToken(UUID, UUID, String)` và `generateVerifyUrl(UUID, UUID, String)`. Token payload là plain string — UUID.toString() hoạt động tốt, `split(":")` vẫn cho đúng 4 phần vì UUID dùng hyphen không phải colon |
+| Thứ tự món trong đơn đổi bất chợt, không khớp tờ hóa đơn giấy | `Order.items` là `@OneToMany` không có `@OrderBy` → thứ tự do DB quyết định | Thêm `@OrderBy("createdAt ASC")` cho `items` và `surcharges` trong `entity/Order.java`. `created_at` là `datetime(6)` nên đủ chính xác |
+| Log api-gateway ngập `ACCESS_REFUSED` (RabbitMQ) | `api-gateway` có `spring-cloud-starter-bus-amqp` nên luôn kết nối RabbitMQ, nhưng là service duy nhất thiếu `SPRING_RABBITMQ_*` trong `docker-compose.yml` → rơi về `guest/guest` | Thêm `SPRING_RABBITMQ_HOST/USERNAME/PASSWORD` + `depends_on: rabbitmq` cho api-gateway. Kiểm tra bằng `docker compose exec -T api-gateway env \| grep -i rabbit`. Chỉ sửa config → `docker compose up -d api-gateway`, không cần Maven |
+| Feign báo "`<service>` tạm thời không khả dụng" ở lần gọi đầu, thử lại thì được | Spring MVC dựng `DispatcherServlet` **lười** — downstream mới init servlet sau khi Feign/Resilience4j đã timeout. Đối chiếu log: lỗi ở caller có timestamp TRƯỚC dòng `Initializing Spring DispatcherServlet` của downstream | Không phải bug code. Làm nóng service trước khi test, hoặc thử lại. Muốn hết hẳn: `spring.mvc.servlet.load-on-startup=1` cho service bị Feign gọi |
+| `skipInventoryDeduction` item bị hoàn kho sai khi cancel/xóa | `cancelOrder`/`removeItem` hoàn kho KHÔNG kiểm tra `item.isInventoryDeducted()` — món quét hóa đơn chưa từng bị trừ kho nhưng vẫn bị gọi restore, làm tăng ảo tồn kho | Filter `.filter(OrderItem::isInventoryDeducted)` trước khi build restore payload trong cả `cancelOrder` và `removeItem` (đã fix — xem `OrderService.java`) |
 
 ---
 
@@ -803,17 +895,23 @@ Error:
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| POST | `/` | EMPLOYEE+ | Tạo order tại bàn |
-| GET | `/` | ADMIN | Danh sách orders |
+| POST | `/` | EMPLOYEE+ | Tạo order (tableId optional — null = đơn quầy không gắn bàn) |
+| GET | `/` | EMPLOYEE+ | Danh sách orders (filter: status, tableId, from/to) |
 | GET | `/table/{qrToken}` | Public | Order hiện tại của bàn qua QR token |
 | GET | `/{orderId}` | EMPLOYEE+ | Chi tiết order |
-| POST | `/{orderId}/items` | EMPLOYEE+ | Thêm món vào order |
+| POST | `/{orderId}/items` | EMPLOYEE+ | Thêm món vào order (`skipInventoryDeduction` — dùng bởi quét hóa đơn, món đã phục vụ nên không trừ kho lại) |
+| PATCH | `/{orderId}/items/{itemId}` | EMPLOYEE+ | Sửa số lượng món |
 | DELETE | `/{orderId}/items/{itemId}` | EMPLOYEE+ | Xóa món khỏi order |
-| POST | `/{orderId}/confirm` | ADMIN | Xác nhận order |
+| POST | `/{orderId}/surcharges` | EMPLOYEE+ | Thêm phụ thu |
+| DELETE | `/{orderId}/surcharges/{surchargeId}` | EMPLOYEE+ | Xóa phụ thu |
 | POST | `/{orderId}/checkout` | EMPLOYEE+ | Checkout order |
-| POST | `/{orderId}/cancel` | ADMIN | Hủy order |
+| POST | `/{orderId}/cancel` | EMPLOYEE+ | Hủy order (chặn nếu có món `fromBooking`; đơn 0 món bị xóa vật lý thay vì soft-cancel) |
+| POST | `/scan-receipt` | EMPLOYEE+ | Quét hóa đơn viết tay bằng AI vision (Gemini) — chỉ phân tích, KHÔNG tạo order/item; client tự gọi các endpoint trên với kết quả trả về. Trả `ReceiptScanResponse` (items + tableLabel + grandTotal + warnings + model). Cần `GEMINI_API_KEY` (xem mục Quét hóa đơn) |
+| POST | `/scan-receipt/feedback` | EMPLOYEE+ | Ghi nhận cách viết tay → món mà nhân viên đã xác nhận, để lần quét sau chính xác hơn |
 | POST | `/{orderId}/checkout-internal` | **Internal** | Dùng bởi payment-service (không expose) |
 | GET | `/stats` | ADMIN | Thống kê đơn hàng hôm nay + top 5 món tháng này |
+
+> Lưu ý: `OrderStatus` chỉ có `OPEN/PAID/CANCELLED` — không có endpoint "confirm" (order không có bước xác nhận riêng, khác với Booking).
 
 **Tables** (`/orders/tables`)
 

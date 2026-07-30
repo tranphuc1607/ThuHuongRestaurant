@@ -7,6 +7,8 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.DynamicUpdate;
 
+import java.util.UUID;
+
 @Entity
 @Table(name = "employees", indexes = {
         @Index(name = "idx_employee_telegram", columnList = "telegram_id"),
@@ -21,8 +23,8 @@ import org.hibernate.annotations.DynamicUpdate;
 public class Employee extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @Column(name = "telegram_id", unique = true)
     private Long telegramId;
@@ -50,8 +52,12 @@ public class Employee extends BaseEntity {
     private Integer targetDays;
 
     // Liên kết với User trong user-service (nullable — nhân viên tạo trực tiếp không có userId)
-    @Column(name = "user_id", unique = true)
-    private Long userId;
+    @Column(name = "user_id", unique = true, columnDefinition = "BINARY(16)")
+    private UUID userId;
+
+    // JSON array of 128 floats from face-api.js FaceRecognitionNet
+    @Column(name = "face_descriptor", columnDefinition = "TEXT")
+    private String faceDescriptor;
 
     @Builder.Default
     private boolean active = true;

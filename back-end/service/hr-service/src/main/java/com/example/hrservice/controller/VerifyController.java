@@ -1,22 +1,24 @@
 package com.example.hrservice.controller;
 
+import com.example.hrservice.entity.DTO.req.FaceCheckinRequest;
 import com.example.hrservice.entity.DTO.res.AttendanceResponse;
+import com.example.hrservice.entity.DTO.res.FaceCheckinResponse;
 import com.example.hrservice.service.AttendanceService;
 import com.example.hrservice.util.CheckinTokenUtil;
+import com.example.restaurant_common.util.exception.MessageException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.UUID;
 
 @Slf4j
 @RestController
@@ -66,8 +68,8 @@ public class VerifyController {
             return;
         }
 
-        Long employeeId = Long.parseLong(fields[0]);
-        Long shiftId = Long.parseLong(fields[1]);
+        UUID employeeId = UUID.fromString(fields[0]);
+        UUID shiftId = UUID.fromString(fields[1]);
         String type = fields[2]; // "IN" hoặc "OUT"
 
         try {
@@ -128,6 +130,22 @@ public class VerifyController {
                     .replace(">", "&gt;")
                     .replace("\"", "&quot;")
                     .replace("'", "&#x27;");
+    }
+
+    /**
+     * Nhân viên chấm công qua nhận diện khuôn mặt trên website (điện thoại / máy tính).
+     * Tự động nhận diện check-in hoặc check-out dựa trên ca làm hôm nay.
+     */
+    @PostMapping("/face-checkin")
+    public ResponseEntity<FaceCheckinResponse> faceCheckin(
+            @RequestBody FaceCheckinRequest req,
+            HttpServletRequest request) throws MessageException {
+
+        String clientIp = getClientIp(request);
+        log.info("[FaceCheckin] clientIp={}, employeeId={}", clientIp, req.getEmployeeId());
+
+        FaceCheckinResponse result = attendanceService.faceCheckIn(req.getEmployeeId());
+        return ResponseEntity.ok(result);
     }
 
     private String buildHtml(String title, String message, String color) {

@@ -21,6 +21,7 @@ import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -37,7 +38,7 @@ public class ShiftService {
                 .collect(Collectors.toList());
     }
 
-    public ShiftResponse getById(Long id) throws MessageException {
+    public ShiftResponse getById(UUID id) throws MessageException {
         return ShiftResponse.from(findById(id));
     }
 
@@ -61,7 +62,7 @@ public class ShiftService {
     }
 
     @Transactional
-    public ShiftResponse update(Long id, CreateShiftRequest req) throws MessageException {
+    public ShiftResponse update(UUID id, CreateShiftRequest req) throws MessageException {
         Shift shift = findById(id);
         boolean overnight = req.getEndTime().isBefore(req.getStartTime());
         double durationMinutes;
@@ -79,7 +80,7 @@ public class ShiftService {
     }
 
     @Transactional
-    public void deactivate(Long id) throws MessageException {
+    public void deactivate(UUID id) throws MessageException {
         Shift shift = findById(id);
         shift.setActive(false);
         shiftRepository.save(shift);
@@ -112,7 +113,7 @@ public class ShiftService {
         return created.stream().map(ShiftAssignmentResponse::from).collect(Collectors.toList());
     }
 
-    public List<ShiftAssignmentResponse> getAssignments(Long employeeId) {
+    public List<ShiftAssignmentResponse> getAssignments(UUID employeeId) {
         return shiftAssignmentRepository.findActiveByEmployee(employeeId)
                 .stream().map(ShiftAssignmentResponse::from).collect(Collectors.toList());
     }
@@ -127,7 +128,7 @@ public class ShiftService {
     }
 
     @Transactional
-    public void cancelAssignment(Long assignmentId) throws MessageException {
+    public void cancelAssignment(UUID assignmentId) throws MessageException {
         ShiftAssignment assignment = shiftAssignmentRepository.findById(assignmentId)
                 .orElseThrow(() -> new MessageException("Không tìm thấy phân ca với ID: " + assignmentId));
         assignment.setActive(false);
@@ -135,7 +136,7 @@ public class ShiftService {
     }
 
     @Transactional
-    public int clearWeekAssignments(Long employeeId, int weekOffset) throws MessageException {
+    public int clearWeekAssignments(UUID employeeId, int weekOffset) throws MessageException {
         employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new MessageException("Không tìm thấy nhân viên"));
         LocalDate today = LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"));
@@ -150,7 +151,7 @@ public class ShiftService {
     }
 
     @Transactional
-    public int clearAllAssignments(Long employeeId) throws MessageException {
+    public int clearAllAssignments(UUID employeeId) throws MessageException {
         employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new MessageException("Không tìm thấy nhân viên"));
         List<ShiftAssignment> active = shiftAssignmentRepository.findActiveByEmployee(employeeId);
@@ -161,7 +162,7 @@ public class ShiftService {
         return active.size();
     }
 
-    public Shift findById(Long id) throws MessageException {
+    public Shift findById(UUID id) throws MessageException {
         return shiftRepository.findById(id)
                 .orElseThrow(() -> new MessageException("Không tìm thấy ca làm với ID: " + id));
     }

@@ -1,7 +1,9 @@
 package com.example.hrservice.controller;
 
 import com.example.hrservice.entity.DTO.req.CreateEmployeeRequest;
+import com.example.hrservice.entity.DTO.req.SaveFaceDescriptorRequest;
 import com.example.hrservice.entity.DTO.res.EmployeeResponse;
+import com.example.hrservice.entity.DTO.res.FaceDescriptorEntry;
 import com.example.hrservice.service.EmployeeService;
 import com.example.restaurant_common.util.exception.MessageException;
 import jakarta.validation.Valid;
@@ -11,7 +13,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/hr/employees")
@@ -31,13 +35,13 @@ public class EmployeeController {
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<EmployeeResponse> getById(@PathVariable Long id) throws MessageException {
+    public ResponseEntity<EmployeeResponse> getById(@PathVariable UUID id) throws MessageException {
         return ResponseEntity.ok(employeeService.getById(id));
     }
 
     @GetMapping("/by-user/{userId}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<EmployeeResponse> getByUserId(@PathVariable Long userId) throws MessageException {
+    public ResponseEntity<EmployeeResponse> getByUserId(@PathVariable UUID userId) throws MessageException {
         return ResponseEntity.ok(employeeService.findByUserId(userId));
     }
 
@@ -49,30 +53,46 @@ public class EmployeeController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<EmployeeResponse> update(@PathVariable Long id,
+    public ResponseEntity<EmployeeResponse> update(@PathVariable UUID id,
                                                     @RequestBody @Valid CreateEmployeeRequest req) throws MessageException {
         return ResponseEntity.ok(employeeService.update(id, req));
     }
 
     @PatchMapping("/{id}/deactivate")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<EmployeeResponse> deactivate(@PathVariable Long id) throws MessageException {
+    public ResponseEntity<EmployeeResponse> deactivate(@PathVariable UUID id) throws MessageException {
         return ResponseEntity.ok(employeeService.deactivate(id));
     }
 
     @PatchMapping("/{id}/activate")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<EmployeeResponse> activate(@PathVariable Long id) throws MessageException {
+    public ResponseEntity<EmployeeResponse> activate(@PathVariable UUID id) throws MessageException {
         return ResponseEntity.ok(employeeService.activate(id));
     }
 
     // Admin tự link telegramId cho nhân viên (thay vì dùng bot)
     @PatchMapping("/{id}/link-telegram")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<EmployeeResponse> linkTelegramById(@PathVariable Long id,
+    public ResponseEntity<EmployeeResponse> linkTelegramById(@PathVariable UUID id,
                                                               @RequestBody Map<String, Long> body) throws MessageException {
         Long telegramId = body.get("telegramId");
         if (telegramId == null) throw new MessageException("Vui lòng cung cấp telegramId");
         return ResponseEntity.ok(employeeService.linkTelegramById(id, telegramId));
+    }
+
+    // Admin đăng ký khuôn mặt cho nhân viên
+    @PatchMapping("/{id}/face-descriptor")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<Map<String, String>> saveFaceDescriptor(
+            @PathVariable UUID id,
+            @RequestBody @Valid SaveFaceDescriptorRequest req) throws MessageException {
+        employeeService.saveFaceDescriptor(id, req);
+        return ResponseEntity.ok(Map.of("message", "Đã lưu khuôn mặt thành công"));
+    }
+
+    // Kiosk khuôn mặt: lấy danh sách descriptor (public — không cần JWT)
+    @GetMapping("/face-descriptors")
+    public ResponseEntity<List<FaceDescriptorEntry>> getFaceDescriptors() {
+        return ResponseEntity.ok(employeeService.listFaceDescriptors());
     }
 }

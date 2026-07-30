@@ -5,11 +5,13 @@ import com.example.hrservice.entity.enums.SalaryType;
 import lombok.Builder;
 import lombok.Data;
 
+import java.util.UUID;
+
 @Data
 @Builder
 public class PayrollResponse {
 
-    private Long employeeId;
+    private UUID employeeId;
     private String employeeName;
     private EmployeeType employeeType;
     private SalaryType salaryType;

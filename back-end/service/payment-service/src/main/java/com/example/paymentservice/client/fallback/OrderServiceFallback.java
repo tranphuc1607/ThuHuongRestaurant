@@ -10,6 +10,7 @@ import org.springframework.cloud.openfeign.FallbackFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
+import java.util.UUID;
 
 @Slf4j
 @Component
@@ -23,7 +24,7 @@ public class OrderServiceFallback implements FallbackFactory<OrderServiceClient>
         return new OrderServiceClient() {
 
             @Override
-            public Map<String, Object> getOrder(Long orderId) {
+            public Map<String, Object> getOrder(UUID orderId) {
                 if (cause instanceof FeignException.NotFound) {
                     throw new RuntimeException("Không tìm thấy đơn hàng id=" + orderId);
                 }
@@ -32,7 +33,7 @@ public class OrderServiceFallback implements FallbackFactory<OrderServiceClient>
             }
 
             @Override
-            public Map<String, Object> checkoutInternal(Long orderId, Map<String, String> body) {
+            public Map<String, Object> checkoutInternal(UUID orderId, Map<String, String> body) {
                 String msg = extractMessage(cause,
                         "Không thể thanh toán đơn hàng id=" + orderId + " — vui lòng thử lại");
                 log.error("order-service checkout thất bại orderId={}: {}", orderId, cause.getMessage());

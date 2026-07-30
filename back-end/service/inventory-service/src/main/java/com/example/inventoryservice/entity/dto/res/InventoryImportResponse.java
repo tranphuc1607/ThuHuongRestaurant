@@ -7,13 +7,14 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Data
 @Builder
 public class InventoryImportResponse {
 
-    private Long id;
-    private Long ingredientId;
+    private UUID id;
+    private UUID ingredientId;
     private String ingredientName;
     private BaseUnit ingredientBaseUnit;
     private Double quantityImported;      // số lượng theo đơn vị cơ sở

@@ -4,11 +4,13 @@ import com.example.userservice.entity.User;
 import lombok.Builder;
 import lombok.Data;
 
+import java.util.UUID;
+
 @Data
 @Builder
 public class UserResponse {
 
-    private Long id;
+    private UUID id;
     private String username;
     private String email;
     private String fullName;

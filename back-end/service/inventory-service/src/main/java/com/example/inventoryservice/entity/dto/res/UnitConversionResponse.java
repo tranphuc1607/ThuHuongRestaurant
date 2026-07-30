@@ -6,13 +6,14 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Data
 @Builder
 public class UnitConversionResponse {
 
-    private Long id;
-    private Long ingredientId;
+    private UUID id;
+    private UUID ingredientId;
     private String ingredientName;
     private SaleUnit saleUnit;
     private Double baseQtyPerSaleUnit;

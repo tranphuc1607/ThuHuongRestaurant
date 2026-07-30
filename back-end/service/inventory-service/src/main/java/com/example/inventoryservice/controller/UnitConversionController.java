@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/inventory/conversions")
@@ -23,7 +24,7 @@ public class UnitConversionController {
 
     @GetMapping("/ingredient/{ingredientId}")
     @PreAuthorize("hasAuthority('ROLE_EMPLOYEE') or hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<List<UnitConversionResponse>> getByIngredient(@PathVariable Long ingredientId) throws MessageException {
+    public ResponseEntity<List<UnitConversionResponse>> getByIngredient(@PathVariable UUID ingredientId) throws MessageException {
         return ResponseEntity.ok(unitConversionService.getByIngredientId(ingredientId));
     }
 
@@ -36,14 +37,14 @@ public class UnitConversionController {
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<UnitConversionResponse> update(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @RequestBody @Valid UnitConversionUpdateRequest req) throws MessageException {
         return ResponseEntity.ok(unitConversionService.update(id, req));
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<Map<String, String>> delete(@PathVariable Long id) throws MessageException {
+    public ResponseEntity<Map<String, String>> delete(@PathVariable UUID id) throws MessageException {
         unitConversionService.delete(id);
         return ResponseEntity.ok(Map.of("message", "Đã xóa quy đổi đơn vị"));
     }

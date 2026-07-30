@@ -6,6 +6,7 @@ import com.example.orderservice.entity.DTO.req.UpdateTableRequest;
 import com.example.orderservice.entity.DTO.res.TableResponse;
 import com.example.orderservice.entity.enums.OrderStatus;
 import com.example.orderservice.entity.enums.TableStatus;
+import com.example.orderservice.entity.enums.TableZone;
 import com.example.orderservice.repository.DiningTableRepository;
 import com.example.orderservice.repository.OrderRepository;
 import com.example.restaurant_common.util.exception.MessageException;
@@ -40,6 +41,7 @@ public class DiningTableService {
                 .tableNumber(req.getTableNumber())
                 .name(req.getName())
                 .qrToken(UUID.randomUUID().toString())
+                .zone(req.getZone() != null ? req.getZone() : TableZone.INDOOR_FLOOR_1)
                 .note(req.getNote())
                 .build();
 
@@ -47,18 +49,19 @@ public class DiningTableService {
     }
 
     @Transactional
-    public TableResponse update(Long id, UpdateTableRequest req) throws MessageException {
+    public TableResponse update(UUID id, UpdateTableRequest req) throws MessageException {
         DiningTable table = tableRepository.findById(id)
                 .orElseThrow(() -> new MessageException("Không tìm thấy bàn với id: " + id));
 
         if (req.getName() != null) table.setName(req.getName());
+        if (req.getZone() != null) table.setZone(req.getZone());
         if (req.getNote() != null) table.setNote(req.getNote());
 
         return TableResponse.from(tableRepository.save(table));
     }
 
     @Transactional
-    public void delete(Long id) throws MessageException {
+    public void delete(UUID id) throws MessageException {
         DiningTable table = tableRepository.findById(id)
                 .orElseThrow(() -> new MessageException("Không tìm thấy bàn với id: " + id));
 
@@ -74,7 +77,7 @@ public class DiningTableService {
     }
 
     @Transactional(readOnly = true)
-    public TableResponse getById(Long id) throws MessageException {
+    public TableResponse getById(UUID id) throws MessageException {
         return TableResponse.from(tableRepository.findById(id)
                 .orElseThrow(() -> new MessageException("Không tìm thấy bàn với id: " + id)));
     }

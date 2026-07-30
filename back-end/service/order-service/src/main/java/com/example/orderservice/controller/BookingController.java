@@ -24,6 +24,7 @@ import java.time.LocalDate;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/bookings")
@@ -68,16 +69,18 @@ public class BookingController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) BookingStatus status,
-            @RequestParam(required = false) Instant from,
-            @RequestParam(required = false) Instant to,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to,
             @RequestParam(defaultValue = "false") boolean excludePending) {
-        return ResponseEntity.ok(bookingService.getAll(page, size, status, from, to, excludePending));
+        Instant fromInstant = from != null && !from.isBlank() ? Instant.parse(from) : null;
+        Instant toInstant   = to   != null && !to.isBlank()   ? Instant.parse(to)   : null;
+        return ResponseEntity.ok(bookingService.getAll(page, size, status, fromInstant, toInstant, excludePending));
     }
 
     @PatchMapping("/{id}/confirm")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<BookingResponse> confirmBooking(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @AuthenticationPrincipal Jwt jwt) throws MessageException {
         return ResponseEntity.ok(bookingService.confirmBooking(id, jwt.getSubject()));
     }
@@ -85,21 +88,21 @@ public class BookingController {
     @PatchMapping("/{id}/confirm-cash")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<BookingResponse> confirmCashBooking(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @AuthenticationPrincipal Jwt jwt) throws MessageException {
         return ResponseEntity.ok(bookingService.confirmCashBooking(id, jwt.getSubject()));
     }
 
     @PatchMapping("/{id}/complete")
     @PreAuthorize("hasAuthority('ROLE_ADMIN') or hasAuthority('ROLE_EMPLOYEE')")
-    public ResponseEntity<BookingResponse> completeBooking(@PathVariable Long id) throws MessageException {
+    public ResponseEntity<BookingResponse> completeBooking(@PathVariable UUID id) throws MessageException {
         return ResponseEntity.ok(bookingService.completeBooking(id));
     }
 
     @PatchMapping("/{id}/cancel")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<BookingResponse> cancelBooking(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @RequestBody(required = false) Map<String, String> body,
             @AuthenticationPrincipal Jwt jwt) throws MessageException {
         String reason = body != null ? body.getOrDefault("cancelReason", "") : "";
@@ -109,12 +112,12 @@ public class BookingController {
     @PostMapping("/{id}/checkout-to-order")
     @PreAuthorize("hasAuthority('ROLE_ADMIN') or hasAuthority('ROLE_EMPLOYEE')")
     public ResponseEntity<OrderResponse> checkoutToOrder(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @RequestBody(required = false) Map<String, Object> body,
             @AuthenticationPrincipal Jwt jwt) throws MessageException {
-        Long tableId = null;
-        if (body != null && body.get("tableId") instanceof Number n) {
-            tableId = n.longValue();
+        UUID tableId = null;
+        if (body != null && body.get("tableId") instanceof String s) {
+            tableId = UUID.fromString(s);
         }
         return ResponseEntity.ok(bookingService.checkoutToOrder(id, tableId, jwt.getSubject()));
     }
@@ -136,16 +139,16 @@ public class BookingController {
     @DeleteMapping("/{id}/items/{itemId}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<BookingResponse> removeBookingItem(
-            @PathVariable Long id,
-            @PathVariable Long itemId) throws MessageException {
+            @PathVariable UUID id,
+            @PathVariable UUID itemId) throws MessageException {
         return ResponseEntity.ok(bookingService.removeBookingItem(id, itemId));
     }
 
     @PatchMapping("/{id}/items/{itemId}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<BookingResponse> updateBookingItemQty(
-            @PathVariable Long id,
-            @PathVariable Long itemId,
+            @PathVariable UUID id,
+            @PathVariable UUID itemId,
             @RequestBody @Valid UpdateItemQtyRequest req) throws MessageException {
         return ResponseEntity.ok(bookingService.updateBookingItemQty(id, itemId, req.getQuantity()));
     }

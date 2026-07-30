@@ -6,6 +6,8 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.DynamicUpdate;
 
+import java.util.UUID;
+
 @Entity
 @Table(name = "unit_conversions", indexes = {
         @Index(name = "idx_uc_ingredient_id", columnList = "ingredient_id"),
@@ -16,8 +18,8 @@ import org.hibernate.annotations.DynamicUpdate;
 public class UnitConversion extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ingredient_id", nullable = false)

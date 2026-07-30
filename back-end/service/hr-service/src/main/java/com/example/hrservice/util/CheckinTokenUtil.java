@@ -8,6 +8,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.UUID;
 
 @Component
 public class CheckinTokenUtil {
@@ -25,7 +26,7 @@ public class CheckinTokenUtil {
      * Format: Base64Url(payload) + "." + Base64Url(HMAC)
      * Payload: "employeeId:shiftId:type:issuedAtMillis"
      */
-    public String generateToken(Long employeeId, Long shiftId, String type) {
+    public String generateToken(UUID employeeId, UUID shiftId, String type) {
         String payload = employeeId + ":" + shiftId + ":" + type + ":" + Instant.now().toEpochMilli();
         String encodedPayload = Base64.getUrlEncoder().withoutPadding()
                 .encodeToString(payload.getBytes(StandardCharsets.UTF_8));
@@ -36,7 +37,7 @@ public class CheckinTokenUtil {
     /**
      * Sinh URL nút bấm xác nhận check-in/out.
      */
-    public String generateVerifyUrl(Long employeeId, Long shiftId, String type) {
+    public String generateVerifyUrl(UUID employeeId, UUID shiftId, String type) {
         String token = generateToken(employeeId, shiftId, type);
         return serverPublicUrl + "/api/v1/hr/verify?token=" + token;
     }

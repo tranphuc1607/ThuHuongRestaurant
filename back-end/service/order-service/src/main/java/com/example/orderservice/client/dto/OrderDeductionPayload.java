@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.util.List;
+import java.util.UUID;
 
 @Data
 @Builder
@@ -15,7 +16,7 @@ public class OrderDeductionPayload {
     @Data
     @Builder
     public static class OrderItem {
-        private Long productId;
+        private UUID productId;
         private Integer quantity;
         private String saleUnit;
     }

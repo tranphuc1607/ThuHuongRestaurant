@@ -8,9 +8,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Repository
-public interface InventoryImportRepository extends JpaRepository<InventoryImport, Long> {
+public interface InventoryImportRepository extends JpaRepository<InventoryImport, UUID> {
 
     Page<InventoryImport> findByIngredient(Ingredient ingredient, Pageable pageable);
 

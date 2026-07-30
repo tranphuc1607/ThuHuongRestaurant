@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
 @Table(name = "order_items", indexes = {
@@ -20,8 +21,8 @@ import java.time.Instant;
 public class OrderItem extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @Version
     private Long version;
@@ -30,8 +31,8 @@ public class OrderItem extends BaseEntity {
     @JoinColumn(name = "order_id", nullable = false)
     private Order order;
 
-    @Column(name = "product_id", nullable = false)
-    private Long productId;
+    @Column(name = "product_id", nullable = false, columnDefinition = "BINARY(16)")
+    private UUID productId;
 
     @Column(name = "product_name", nullable = false, length = 200)
     private String productName;

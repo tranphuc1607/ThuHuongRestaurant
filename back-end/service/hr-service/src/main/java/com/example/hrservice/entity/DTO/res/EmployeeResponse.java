@@ -7,13 +7,14 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Data
 @Builder
 public class EmployeeResponse {
 
-    private Long id;
-    private Long userId;
+    private UUID id;
+    private UUID userId;
     private Long telegramId;
     private String name;
     private String phone;
@@ -22,6 +23,7 @@ public class EmployeeResponse {
     private Double baseValue;
     private Integer targetDays;
     private boolean active;
+    private boolean hasFace;
     private Instant createdAt;
 
     public static EmployeeResponse from(Employee e) {
@@ -36,6 +38,7 @@ public class EmployeeResponse {
                 .baseValue(e.getBaseValue())
                 .targetDays(e.getTargetDays())
                 .active(e.isActive())
+                .hasFace(e.getFaceDescriptor() != null && !e.getFaceDescriptor().isBlank())
                 .createdAt(e.getCreatedAt())
                 .build();
     }

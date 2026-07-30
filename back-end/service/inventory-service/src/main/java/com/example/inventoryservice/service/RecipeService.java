@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -41,14 +42,14 @@ public class RecipeService {
     }
 
     @Transactional(readOnly = true)
-    public List<RecipeResponse> getByProductId(Long productId) {
+    public List<RecipeResponse> getByProductId(UUID productId) {
         return recipeRepository.findByProductId(productId)
                 .stream().map(RecipeResponse::from).collect(Collectors.toList());
     }
 
     // Kiểm tra sản phẩm có đủ nguyên liệu để làm không
     @Transactional(readOnly = true)
-    public boolean isProductAvailable(Long productId) {
+    public boolean isProductAvailable(UUID productId) {
         List<Recipe> recipes = recipeRepository.findByProductId(productId);
         if (recipes.isEmpty()) return true;
 
@@ -58,7 +59,7 @@ public class RecipeService {
     }
 
     @Transactional
-    public void delete(Long id) throws MessageException {
+    public void delete(UUID id) throws MessageException {
         if (!recipeRepository.existsById(id)) {
             throw new MessageException("Không tìm thấy công thức với id: " + id);
         }
@@ -66,7 +67,7 @@ public class RecipeService {
     }
 
     @Transactional
-    public void deleteByProductId(Long productId) {
+    public void deleteByProductId(UUID productId) {
         recipeRepository.deleteByProductId(productId);
     }
 }

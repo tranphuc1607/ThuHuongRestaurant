@@ -17,8 +17,10 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/inventory/deductions")
@@ -70,7 +72,7 @@ public class StockDeductionController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<Void> deleteDeduction(@PathVariable Long id) throws MessageException {
+    public ResponseEntity<Void> deleteDeduction(@PathVariable UUID id) throws MessageException {
         stockDeductionService.deleteDeduction(id);
         return ResponseEntity.noContent().build();
     }
@@ -80,8 +82,12 @@ public class StockDeductionController {
     public ResponseEntity<Page<StockDeductionResponse>> getAll(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(required = false) Long ingredientId,
-            @RequestParam(required = false) DeductionReason reason) throws MessageException {
-        return ResponseEntity.ok(stockDeductionService.getAll(page, size, ingredientId, reason));
+            @RequestParam(required = false) UUID ingredientId,
+            @RequestParam(required = false) DeductionReason reason,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to) {
+        Instant fromInstant = from != null && !from.isBlank() ? Instant.parse(from) : null;
+        Instant toInstant   = to   != null && !to.isBlank()   ? Instant.parse(to)   : null;
+        return ResponseEntity.ok(stockDeductionService.getAll(page, size, ingredientId, reason, fromInstant, toInstant));
     }
 }

@@ -6,15 +6,16 @@ import lombok.Data;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Data
 @Builder
 public class ShiftAssignmentResponse {
 
-    private Long id;
-    private Long employeeId;
+    private UUID id;
+    private UUID employeeId;
     private String employeeName;
-    private Long shiftId;
+    private UUID shiftId;
     private String shiftName;
     private DayOfWeek dayOfWeek;
     private LocalDate effectiveFrom;

@@ -29,7 +29,7 @@ public class AuthController {
 
     @PostMapping("/refresh")
     public ResponseEntity<LoginResponse> refreshToken(
-            @CookieValue(name = "refresh_token") String refreshToken) throws MessageException {
+            @CookieValue(name = "refresh_token", required = false) String refreshToken) throws MessageException {
         return authService.refreshToken(refreshToken);
     }
 

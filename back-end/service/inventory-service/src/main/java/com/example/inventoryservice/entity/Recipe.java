@@ -5,6 +5,8 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.DynamicUpdate;
 
+import java.util.UUID;
+
 @Entity
 @Table(name = "recipes", indexes = {
     @Index(name = "idx_recipe_product_id", columnList = "product_id")
@@ -18,11 +20,11 @@ import org.hibernate.annotations.DynamicUpdate;
 public class Recipe extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
-    @Column(name = "product_id", nullable = false)
-    private Long productId;
+    @Column(name = "product_id", nullable = false, columnDefinition = "BINARY(16)")
+    private UUID productId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ingredient_id", nullable = false)

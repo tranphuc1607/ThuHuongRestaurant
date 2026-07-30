@@ -7,7 +7,6 @@ import com.example.restaurant_common.util.exception.MessageException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -15,6 +14,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/inventory/imports")
@@ -34,7 +34,7 @@ public class InventoryImportController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<Void> deleteImport(@PathVariable Long id) throws MessageException {
+    public ResponseEntity<Void> deleteImport(@PathVariable UUID id) throws MessageException {
         inventoryImportService.deleteImport(id);
         return ResponseEntity.noContent().build();
     }
@@ -44,9 +44,11 @@ public class InventoryImportController {
     public ResponseEntity<Page<InventoryImportResponse>> getAll(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(required = false) Long ingredientId,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to) throws MessageException {
-        return ResponseEntity.ok(inventoryImportService.getAll(page, size, ingredientId, from, to));
+            @RequestParam(required = false) UUID ingredientId,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to) throws MessageException {
+        Instant fromInstant = from != null && !from.isBlank() ? Instant.parse(from) : null;
+        Instant toInstant   = to   != null && !to.isBlank()   ? Instant.parse(to)   : null;
+        return ResponseEntity.ok(inventoryImportService.getAll(page, size, ingredientId, fromInstant, toInstant));
     }
 }

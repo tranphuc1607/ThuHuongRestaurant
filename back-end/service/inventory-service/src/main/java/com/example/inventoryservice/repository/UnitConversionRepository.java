@@ -8,9 +8,10 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
-public interface UnitConversionRepository extends JpaRepository<UnitConversion, Long> {
+public interface UnitConversionRepository extends JpaRepository<UnitConversion, UUID> {
 
     List<UnitConversion> findByIngredient(Ingredient ingredient);
 

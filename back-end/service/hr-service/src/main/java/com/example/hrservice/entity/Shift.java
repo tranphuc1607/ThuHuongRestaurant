@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "shifts")
@@ -15,8 +16,8 @@ import java.time.LocalTime;
 public class Shift {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @Column(nullable = false, length = 50)
     private String name;

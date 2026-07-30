@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/inventory/recipes")
@@ -22,7 +23,7 @@ public class RecipeController {
 
     @GetMapping("/product/{productId}")
     @PreAuthorize("hasAuthority('ROLE_EMPLOYEE') or hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<List<RecipeResponse>> getByProductId(@PathVariable Long productId) {
+    public ResponseEntity<List<RecipeResponse>> getByProductId(@PathVariable UUID productId) {
         return ResponseEntity.ok(recipeService.getByProductId(productId));
     }
     @PostMapping
@@ -33,14 +34,14 @@ public class RecipeController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<Map<String, String>> delete(@PathVariable Long id) throws MessageException {
+    public ResponseEntity<Map<String, String>> delete(@PathVariable UUID id) throws MessageException {
         recipeService.delete(id);
         return ResponseEntity.ok(Map.of("message", "Đã xóa công thức"));
     }
 
     @DeleteMapping("/product/{productId}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<Map<String, String>> deleteByProductId(@PathVariable Long productId) {
+    public ResponseEntity<Map<String, String>> deleteByProductId(@PathVariable UUID productId) {
         recipeService.deleteByProductId(productId);
         return ResponseEntity.ok(Map.of("message", "Đã xóa tất cả công thức của sản phẩm"));
     }

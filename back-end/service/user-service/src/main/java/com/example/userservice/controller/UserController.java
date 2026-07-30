@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/users")
@@ -27,7 +28,6 @@ import java.util.Map;
 public class UserController {
 
     private final UserService userService;
-
 
     @PostMapping("/provision")
     public ResponseEntity<?> provisionUser(@RequestBody ProvisionUserRequest req) {
@@ -50,7 +50,6 @@ public class UserController {
         return ResponseEntity.ok(userService.updateProfile(jwt.getSubject(), request));
     }
 
-
     @GetMapping
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<Page<UserResponse>> getAllUsers(
@@ -70,7 +69,7 @@ public class UserController {
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<UserResponse> getUserById(@PathVariable Long id) throws MessageException {
+    public ResponseEntity<UserResponse> getUserById(@PathVariable UUID id) throws MessageException {
         return ResponseEntity.ok(userService.getUserById(id));
     }
 
@@ -84,19 +83,20 @@ public class UserController {
     @PatchMapping("/{id}/role")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<UserResponse> updateRole(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @Valid @RequestBody UpdateRoleRequest request) throws MessageException {
         return ResponseEntity.ok(userService.updateRole(id, request));
     }
+
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<UserResponse> toggleStatus(@PathVariable Long id) throws MessageException {
+    public ResponseEntity<UserResponse> toggleStatus(@PathVariable UUID id) throws MessageException {
         return ResponseEntity.ok(userService.toggleStatus(id));
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<Void> deleteUser(@PathVariable Long id) throws MessageException {
+    public ResponseEntity<Void> deleteUser(@PathVariable UUID id) throws MessageException {
         userService.deleteUser(id);
         return ResponseEntity.noContent().build();
     }

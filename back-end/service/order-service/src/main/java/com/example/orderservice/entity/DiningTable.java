@@ -1,12 +1,15 @@
 package com.example.orderservice.entity;
 
 import com.example.orderservice.entity.enums.TableStatus;
+import com.example.orderservice.entity.enums.TableZone;
 import com.example.restaurant_common.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
+
+import java.util.UUID;
 
 @Entity
 @Table(name = "dining_tables", indexes = {
@@ -24,8 +27,8 @@ import org.hibernate.annotations.SQLRestriction;
 public class DiningTable extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @Column(name = "table_number", nullable = false, unique = true)
     private Integer tableNumber;
@@ -40,6 +43,11 @@ public class DiningTable extends BaseEntity {
     @Column(nullable = false, length = 20)
     @Builder.Default
     private TableStatus status = TableStatus.AVAILABLE;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "zone", length = 20)
+    @Builder.Default
+    private TableZone zone = TableZone.INDOOR_FLOOR_1;
 
     @Column(length = 500)
     private String note;

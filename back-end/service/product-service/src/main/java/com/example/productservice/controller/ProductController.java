@@ -16,6 +16,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/products")
@@ -36,7 +37,7 @@ public class ProductController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ProductResponse> getById(@PathVariable Long id) throws MessageException {
+    public ResponseEntity<ProductResponse> getById(@PathVariable UUID id) throws MessageException {
         return ResponseEntity.ok(productService.getProductById(id));
     }
 
@@ -49,7 +50,7 @@ public class ProductController {
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<ProductResponse> update(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @Valid @RequestBody ProductUpdateRequest request) throws MessageException {
         return ResponseEntity.ok(productService.updateProduct(id, request));
     }
@@ -57,14 +58,14 @@ public class ProductController {
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<ProductResponse> updateStatus(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @RequestParam ProductStatus status) throws MessageException {
         return ResponseEntity.ok(productService.updateStatus(id, status));
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<Map<String, String>> delete(@PathVariable Long id) throws MessageException {
+    public ResponseEntity<Map<String, String>> delete(@PathVariable UUID id) throws MessageException {
         productService.deleteProduct(id);
         return ResponseEntity.ok(Map.of("message", "Đã xóa sản phẩm"));
     }

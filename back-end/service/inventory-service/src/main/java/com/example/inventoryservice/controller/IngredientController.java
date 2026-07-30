@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/inventory/ingredients")
@@ -44,7 +45,7 @@ public class IngredientController {
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('ROLE_EMPLOYEE') or hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<IngredientResponse> getById(@PathVariable Long id) throws MessageException {
+    public ResponseEntity<IngredientResponse> getById(@PathVariable UUID id) throws MessageException {
         return ResponseEntity.ok(ingredientService.getById(id));
     }
 
@@ -57,21 +58,21 @@ public class IngredientController {
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<IngredientResponse> update(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @RequestBody @Valid IngredientUpdateRequest req) throws MessageException {
         return ResponseEntity.ok(ingredientService.update(id, req));
     }
 
     @PatchMapping("/{id}/deactivate")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<Map<String, String>> deactivate(@PathVariable Long id) throws MessageException {
+    public ResponseEntity<Map<String, String>> deactivate(@PathVariable UUID id) throws MessageException {
         ingredientService.deactivate(id);
         return ResponseEntity.ok(Map.of("message", "Đã ngừng sử dụng nguyên liệu"));
     }
 
     @PatchMapping("/{id}/activate")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<Map<String, String>> activate(@PathVariable Long id) throws MessageException {
+    public ResponseEntity<Map<String, String>> activate(@PathVariable UUID id) throws MessageException {
         ingredientService.activate(id);
         return ResponseEntity.ok(Map.of("message", "Đã kích hoạt lại nguyên liệu"));
     }

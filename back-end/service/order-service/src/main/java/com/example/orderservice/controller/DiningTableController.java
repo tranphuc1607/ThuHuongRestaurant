@@ -13,6 +13,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/orders/tables")
@@ -33,7 +34,7 @@ public class DiningTableController {
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('ROLE_EMPLOYEE') or hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<TableResponse> getById(@PathVariable Long id) throws MessageException {
+    public ResponseEntity<TableResponse> getById(@PathVariable UUID id) throws MessageException {
         return ResponseEntity.ok(diningTableService.getById(id));
     }
 
@@ -47,14 +48,14 @@ public class DiningTableController {
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<TableResponse> update(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @RequestBody @Valid UpdateTableRequest req) throws MessageException {
         return ResponseEntity.ok(diningTableService.update(id, req));
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<Object> delete(@PathVariable Long id) throws MessageException {
+    public ResponseEntity<Object> delete(@PathVariable UUID id) throws MessageException {
         diningTableService.delete(id);
         return ResponseEntity.ok(java.util.Map.of("message", "Xóa bàn thành công"));
     }

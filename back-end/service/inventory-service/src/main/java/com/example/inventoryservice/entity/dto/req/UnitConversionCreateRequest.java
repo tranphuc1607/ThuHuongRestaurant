@@ -5,11 +5,13 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.util.UUID;
+
 @Data
 public class UnitConversionCreateRequest {
 
     @NotNull(message = "ID nguyên liệu không được để trống")
-    private Long ingredientId;
+    private UUID ingredientId;
 
     @NotNull(message = "Đơn vị bán không được để trống")
     private SaleUnit saleUnit;

@@ -54,11 +54,18 @@ public class OrderService {
 
     @Transactional
     public OrderResponse createOrder(CreateOrderRequest req, String createdBy) throws MessageException {
-        DiningTable table = tableRepository.findById(req.getTableId())
-                .orElseThrow(() -> new MessageException("Không tìm thấy bàn với id: " + req.getTableId()));
+        DiningTable table = null;
+        if (req.getTableId() != null) {
+            table = tableRepository.findById(req.getTableId())
+                    .orElseThrow(() -> new MessageException("Không tìm thấy bàn với id: " + req.getTableId()));
 
-        if (orderRepository.existsByDiningTableAndStatusIn(table, List.of(OrderStatus.OPEN))) {
-            throw new MessageException("Bàn " + table.getName() + " đang có đơn hàng chưa thanh toán");
+            if (orderRepository.existsByDiningTableAndStatusIn(table, List.of(OrderStatus.OPEN))) {
+                throw new MessageException("Bàn " + table.getName() + " đang có đơn hàng chưa thanh toán");
+            }
+
+            table.setStatus(TableStatus.OCCUPIED);
+            table.setQrToken(UUID.randomUUID().toString());
+            tableRepository.save(table);
         }
 
         Order order = Order.builder()
@@ -68,17 +75,13 @@ public class OrderService {
                 .build();
         order.setCreatedBy(createdBy);
 
-        table.setStatus(TableStatus.OCCUPIED);
-        table.setQrToken(UUID.randomUUID().toString());
-        tableRepository.save(table);
-
         order = orderRepository.save(order);
 
         return buildOrderResponse(order);
     }
 
     @Transactional
-    public OrderResponse addItem(Long orderId, AddOrderItemRequest req) throws MessageException {
+    public OrderResponse addItem(UUID orderId, AddOrderItemRequest req) throws MessageException {
         Order order = orderRepository.findByIdWithItemsAndTable(orderId)
                 .orElseThrow(() -> new MessageException("Không tìm thấy đơn hàng với id: " + orderId));
 
@@ -120,18 +123,20 @@ public class OrderService {
             }
         }
 
-        // Trừ kho ngay lập tức — nếu không đủ hàng thì reject addItem
-        try {
-            inventoryServiceClient.deductForOrder(OrderDeductionPayload.builder()
-                    .orderId(orderId.toString())
-                    .items(List.of(OrderDeductionPayload.OrderItem.builder()
-                            .productId(req.getProductId())
-                            .quantity(req.getQuantity())
-                            .saleUnit(req.getSaleUnit())
-                            .build()))
-                    .build());
-        } catch (Exception e) {
-            throw new MessageException(extractErrorMessage(e));
+        // Trừ kho ngay lập tức — bỏ qua nếu là đơn quét hóa đơn (thức ăn đã phục vụ)
+        if (!req.isSkipInventoryDeduction()) {
+            try {
+                inventoryServiceClient.deductForOrder(OrderDeductionPayload.builder()
+                        .orderId(orderId.toString())
+                        .items(List.of(OrderDeductionPayload.OrderItem.builder()
+                                .productId(req.getProductId())
+                                .quantity(req.getQuantity())
+                                .saleUnit(req.getSaleUnit())
+                                .build()))
+                        .build());
+            } catch (Exception e) {
+                throw new MessageException(extractErrorMessage(e));
+            }
         }
 
         OrderItem item = OrderItem.builder()
@@ -142,7 +147,7 @@ public class OrderService {
                 .quantity(req.getQuantity())
                 .saleUnit(req.getSaleUnit())
                 .itemTotal(productPrice * req.getQuantity())
-                .inventoryDeducted(true)
+                .inventoryDeducted(!req.isSkipInventoryDeduction())
                 .category(productCategory)
                 .build();
 
@@ -156,7 +161,7 @@ public class OrderService {
     }
 
     @Transactional
-    public OrderResponse updateItemQty(Long orderId, Long itemId, int newQty) throws MessageException {
+    public OrderResponse updateItemQty(UUID orderId, UUID itemId, int newQty) throws MessageException {
         Order order = orderRepository.findByIdWithItemsAndTable(orderId)
                 .orElseThrow(() -> new MessageException("Không tìm thấy đơn hàng với id: " + orderId));
 
@@ -203,7 +208,7 @@ public class OrderService {
     }
 
     @Transactional
-    public OrderResponse removeItem(Long orderId, Long itemId) throws MessageException {
+    public OrderResponse removeItem(UUID orderId, UUID itemId) throws MessageException {
         Order order = orderRepository.findByIdWithItemsAndTable(orderId)
                 .orElseThrow(() -> new MessageException("Không tìm thấy đơn hàng với id: " + orderId));
 
@@ -216,18 +221,20 @@ public class OrderService {
                 .findFirst()
                 .orElseThrow(() -> new MessageException("Không tìm thấy món với id: " + itemId));
 
-        // Luôn hoàn kho khi xóa món — trừ kho đã xảy ra ngay lúc thêm
-        try {
-            inventoryServiceClient.restoreForBooking(OrderDeductionPayload.builder()
-                    .orderId(order.getId().toString())
-                    .items(List.of(OrderDeductionPayload.OrderItem.builder()
-                            .productId(item.getProductId())
-                            .quantity(item.getQuantity())
-                            .saleUnit(item.getSaleUnit())
-                            .build()))
-                    .build());
-        } catch (Exception e) {
-            log.warn("Không thể hoàn kho khi xóa món {}: {}", item.getProductId(), e.getMessage());
+        // Hoàn kho khi xóa món — chỉ khi kho đã thực sự bị trừ lúc thêm (bỏ qua món skipInventoryDeduction, vd quét hóa đơn)
+        if (item.isInventoryDeducted()) {
+            try {
+                inventoryServiceClient.restoreForBooking(OrderDeductionPayload.builder()
+                        .orderId(order.getId().toString())
+                        .items(List.of(OrderDeductionPayload.OrderItem.builder()
+                                .productId(item.getProductId())
+                                .quantity(item.getQuantity())
+                                .saleUnit(item.getSaleUnit())
+                                .build()))
+                        .build());
+            } catch (Exception e) {
+                log.warn("Không thể hoàn kho khi xóa món {}: {}", item.getProductId(), e.getMessage());
+            }
         }
 
         order.getItems().remove(item);
@@ -240,7 +247,7 @@ public class OrderService {
     }
 
     @Transactional
-    public OrderResponse checkout(Long orderId, String paidBy) throws MessageException {
+    public OrderResponse checkout(UUID orderId, String paidBy) throws MessageException {
         Order order = orderRepository.findByIdWithItemsAndTable(orderId)
                 .orElseThrow(() -> new MessageException("Không tìm thấy đơn hàng với id: " + orderId));
 
@@ -268,7 +275,7 @@ public class OrderService {
     }
 
     @Transactional
-    public OrderResponse cancelOrder(Long orderId, String reason) throws MessageException {
+    public OrderResponse cancelOrder(UUID orderId, String reason) throws MessageException {
         Order order = orderRepository.findByIdWithItemsAndTable(orderId)
                 .orElseThrow(() -> new MessageException("Không tìm thấy đơn hàng với id: " + orderId));
 
@@ -281,8 +288,9 @@ public class OrderService {
             throw new MessageException("Không thể hủy đơn hàng chuyển từ đặt bàn");
         }
 
-        // Hoàn kho tất cả items — kho đã trừ ngay khi thêm
+        // Hoàn kho các items đã thực sự bị trừ — bỏ qua món skipInventoryDeduction (vd quét hóa đơn, thức ăn đã phục vụ)
         List<OrderDeductionPayload.OrderItem> restoreItems = order.getItems().stream()
+                .filter(OrderItem::isInventoryDeducted)
                 .map(i -> OrderDeductionPayload.OrderItem.builder()
                         .productId(i.getProductId())
                         .quantity(i.getQuantity())
@@ -325,7 +333,7 @@ public class OrderService {
     }
 
     @Transactional(readOnly = true)
-    public OrderResponse getById(Long orderId) throws MessageException {
+    public OrderResponse getById(UUID orderId) throws MessageException {
         Order order = orderRepository.findByIdWithItemsAndTable(orderId)
                 .orElseThrow(() -> new MessageException("Không tìm thấy đơn hàng với id: " + orderId));
         return buildOrderResponse(order);
@@ -343,8 +351,17 @@ public class OrderService {
     }
 
     @Transactional(readOnly = true)
-    public Page<OrderResponse> getAll(int page, int size, Long tableId, OrderStatus status) throws MessageException {
+    public Page<OrderResponse> getAll(int page, int size, UUID tableId, OrderStatus status, java.time.Instant from, java.time.Instant to) throws MessageException {
         PageRequest pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+
+        if (from != null && to != null) {
+            if (status != null) {
+                return orderRepository.findByStatusAndCreatedAtBetween(status, from, to, pageable)
+                        .map(this::buildOrderResponse);
+            }
+            return orderRepository.findByCreatedAtBetween(from, to, pageable)
+                    .map(this::buildOrderResponse);
+        }
 
         if (tableId != null && status != null) {
             DiningTable table = tableRepository.findById(tableId)
@@ -369,7 +386,7 @@ public class OrderService {
     }
 
     @Transactional
-    public OrderResponse addSurcharge(Long orderId, AddSurchargeRequest req) throws MessageException {
+    public OrderResponse addSurcharge(UUID orderId, AddSurchargeRequest req) throws MessageException {
         Order order = orderRepository.findByIdWithItemsAndTable(orderId)
                 .orElseThrow(() -> new MessageException("Không tìm thấy đơn hàng với id: " + orderId));
 
@@ -395,7 +412,7 @@ public class OrderService {
     }
 
     @Transactional
-    public OrderResponse removeSurcharge(Long orderId, Long surchargeId) throws MessageException {
+    public OrderResponse removeSurcharge(UUID orderId, UUID surchargeId) throws MessageException {
         Order order = orderRepository.findByIdWithItemsAndTable(orderId)
                 .orElseThrow(() -> new MessageException("Không tìm thấy đơn hàng với id: " + orderId));
 

@@ -14,9 +14,10 @@ import org.springframework.stereotype.Repository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
-public interface BookingRepository extends JpaRepository<Booking, Long> {
+public interface BookingRepository extends JpaRepository<Booking, UUID> {
 
     @EntityGraph(attributePaths = {"diningTable", "items"})
     Optional<Booking> findByBookingCode(String bookingCode);
@@ -26,7 +27,7 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     @Query("SELECT b FROM Booking b WHERE b.diningTable.id = :tableId AND b.status = 'CONFIRMED' " +
            "AND b.scheduledTime BETWEEN :from AND :to")
-    List<Booking> findConflictingBookings(@Param("tableId") Long tableId,
+    List<Booking> findConflictingBookings(@Param("tableId") UUID tableId,
                                           @Param("from") Instant from,
                                           @Param("to") Instant to);
 

@@ -10,6 +10,7 @@ import lombok.Data;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Data
 public class CreateBookingRequest {
@@ -23,7 +24,7 @@ public class CreateBookingRequest {
 
     private String customerBankAccount;
 
-    private Long tableId;
+    private UUID tableId;
 
     @NotNull(message = "Vui lòng chọn giờ đến")
     private Instant scheduledTime;

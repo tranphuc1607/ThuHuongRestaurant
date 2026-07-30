@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -77,7 +78,7 @@ public class InventoryImportService {
     }
 
     @Transactional
-    public void deleteImport(Long id) throws MessageException {
+    public void deleteImport(UUID id) throws MessageException {
         InventoryImport record = importRepository.findById(id)
                 .orElseThrow(() -> new MessageException("Không tìm thấy phiếu nhập kho với id: " + id));
 
@@ -90,7 +91,7 @@ public class InventoryImportService {
     }
 
     @Transactional(readOnly = true)
-    public Page<InventoryImportResponse> getAll(int page, int size, Long ingredientId, Instant from, Instant to) throws MessageException {
+    public Page<InventoryImportResponse> getAll(int page, int size, UUID ingredientId, Instant from, Instant to) throws MessageException {
         PageRequest pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
 
         if (ingredientId != null && from != null && to != null) {

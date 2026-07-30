@@ -7,9 +7,10 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
-public interface DiningTableRepository extends JpaRepository<DiningTable, Long> {
+public interface DiningTableRepository extends JpaRepository<DiningTable, UUID> {
 
     Optional<DiningTable> findByQrToken(String qrToken);
 
@@ -18,4 +19,6 @@ public interface DiningTableRepository extends JpaRepository<DiningTable, Long> 
     List<DiningTable> findAllByOrderByTableNumberAsc();
 
     List<DiningTable> findByStatus(TableStatus status);
+
+    List<DiningTable> findByZoneIsNull();
 }

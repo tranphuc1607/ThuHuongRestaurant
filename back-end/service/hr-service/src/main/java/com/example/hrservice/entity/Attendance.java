@@ -7,6 +7,7 @@ import org.hibernate.annotations.DynamicUpdate;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Entity
 @Table(name = "attendances", indexes = {
@@ -22,15 +23,15 @@ import java.time.LocalDate;
 public class Attendance extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "employee_id", nullable = false)
     private Employee employee;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "shift_id", nullable = false)
+    @JoinColumn(name = "shift_id", nullable = true)
     private Shift shift;
 
     @Column(name = "check_in_time", nullable = false)

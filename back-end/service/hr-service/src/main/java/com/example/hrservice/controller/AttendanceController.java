@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/hr/attendance")
@@ -28,7 +29,7 @@ public class AttendanceController {
 
     @GetMapping
     public ResponseEntity<Page<AttendanceResponse>> getAll(
-            @RequestParam(required = false) Long employeeId,
+            @RequestParam(required = false) UUID employeeId,
             @RequestParam(defaultValue = "0") int month,
             @RequestParam(defaultValue = "0") int year,
             @RequestParam(defaultValue = "0") int page,
@@ -41,25 +42,25 @@ public class AttendanceController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<AttendanceResponse> getById(@PathVariable Long id) throws MessageException {
+    public ResponseEntity<AttendanceResponse> getById(@PathVariable UUID id) throws MessageException {
         return ResponseEntity.ok(attendanceService.getById(id));
     }
 
     @PatchMapping("/{id}")
-    public ResponseEntity<AttendanceResponse> update(@PathVariable Long id,
+    public ResponseEntity<AttendanceResponse> update(@PathVariable UUID id,
                                                       @RequestBody @Valid UpdateAttendanceRequest req,
                                                       @AuthenticationPrincipal Jwt jwt) throws MessageException {
         return ResponseEntity.ok(attendanceService.update(id, req, jwt.getSubject()));
     }
 
     @PostMapping("/{id}/punish")
-    public ResponseEntity<AttendanceResponse> punish(@PathVariable Long id,
+    public ResponseEntity<AttendanceResponse> punish(@PathVariable UUID id,
                                                       @RequestBody @Valid PunishRequest req) throws MessageException {
         return ResponseEntity.ok(attendanceService.punish(id, req));
     }
 
     @DeleteMapping("/{id}/punish")
-    public ResponseEntity<AttendanceResponse> removePunishment(@PathVariable Long id) throws MessageException {
+    public ResponseEntity<AttendanceResponse> removePunishment(@PathVariable UUID id) throws MessageException {
         return ResponseEntity.ok(attendanceService.removePunishment(id));
     }
 }

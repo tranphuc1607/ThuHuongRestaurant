@@ -1,5 +1,6 @@
 package com.example.orderservice.entity.DTO.req;
 
+import com.example.orderservice.entity.enums.TableZone;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -14,6 +15,8 @@ public class CreateTableRequest {
 
     @NotBlank(message = "Tên bàn không được để trống")
     private String name;
+
+    private TableZone zone;
 
     private String note;
 }

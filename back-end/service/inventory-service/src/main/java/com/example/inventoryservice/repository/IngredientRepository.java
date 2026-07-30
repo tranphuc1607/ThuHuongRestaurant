@@ -12,9 +12,10 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.UUID;
 
 @Repository
-public interface IngredientRepository extends JpaRepository<Ingredient, Long> {
+public interface IngredientRepository extends JpaRepository<Ingredient, UUID> {
 
     @Query("SELECT i FROM Ingredient i WHERE " +
            "(:category IS NULL OR i.category = :category) AND " +
@@ -33,5 +34,5 @@ public interface IngredientRepository extends JpaRepository<Ingredient, Long> {
     // Native query để bypass @SQLRestriction khi activate lại ingredient đã deactivate
     @Modifying
     @Query(value = "UPDATE ingredients SET is_active = true WHERE id = :id", nativeQuery = true)
-    int activateById(@Param("id") Long id);
+    int activateById(@Param("id") UUID id);
 }

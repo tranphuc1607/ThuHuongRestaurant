@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.YearMonth;
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/hr/payroll")
@@ -28,7 +29,7 @@ public class PayrollController {
     }
 
     @GetMapping("/{employeeId}")
-    public ResponseEntity<PayrollResponse> calculateOne(@PathVariable Long employeeId,
+    public ResponseEntity<PayrollResponse> calculateOne(@PathVariable UUID employeeId,
                                                          @RequestParam(defaultValue = "0") int month,
                                                          @RequestParam(defaultValue = "0") int year) throws MessageException {
         YearMonth ym = (month <= 0 || year <= 0) ? YearMonth.now() : YearMonth.of(year, month);

@@ -1,0 +1,12 @@
+{
+  "_huongDan": "Copy file này thành <tên-ảnh>.json rồi điền đúng nội dung viết tay trên tờ hoá đơn. productName phải là TÊN CHUẨN trong thực đơn (khớp chính xác), không phải chữ viết tắt trên giấy.",
+  "tableLabel": "7",
+  "grandTotal": 380000,
+  "items": [
+    { "productName": "Gà chiên nước mắm", "quantity": 2, "unitPrice": 80000, "lineTotal": 160000 },
+    { "productName": "Sườn heo nướng BBQ", "quantity": 1, "unitPrice": 95000, "lineTotal": 95000 },
+    { "productName": "Rau muống xào tỏi", "quantity": 1, "unitPrice": 35000, "lineTotal": 35000 },
+    { "productName": "Bia Cốc", "quantity": 4, "unitPrice": 15000, "lineTotal": 60000 },
+    { "productName": "Cơm trắng", "quantity": 3, "unitPrice": 10000, "lineTotal": 30000 }
+  ]
+}

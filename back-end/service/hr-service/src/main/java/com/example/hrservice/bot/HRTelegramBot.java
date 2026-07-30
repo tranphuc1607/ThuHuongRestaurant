@@ -439,8 +439,8 @@ public class HRTelegramBot extends TelegramLongPollingBot {
     private void handleShiftSelected(long chatId, int messageId, String data) {
         // data = "SELECT_SHIFT:{employeeId}:{shiftId}"
         String[] parts = data.split(":");
-        Long employeeId = Long.parseLong(parts[1]);
-        Long shiftId = Long.parseLong(parts[2]);
+        UUID employeeId = UUID.fromString(parts[1]);
+        UUID shiftId = UUID.fromString(parts[2]);
 
         try {
             ShiftChangeRequest request = swapService.requestSwap(employeeId, shiftId);
@@ -463,8 +463,8 @@ public class HRTelegramBot extends TelegramLongPollingBot {
 
     private void handleConfirmCheckin(long chatId, int messageId, String data) throws TelegramApiException {
         String[] parts = data.split(":");
-        Long empId   = Long.parseLong(parts[1]);
-        Long shiftId = Long.parseLong(parts[2]);
+        UUID empId   = UUID.fromString(parts[1]);
+        UUID shiftId = UUID.fromString(parts[2]);
         long issuedAt = Long.parseLong(parts[3]);
 
         // 1. Nút hết hạn sau 5 phút
@@ -517,8 +517,8 @@ public class HRTelegramBot extends TelegramLongPollingBot {
 
     private void handleEarlyCheckin(long chatId, int messageId, String data) throws TelegramApiException {
         String[] parts = data.split(":");
-        Long empId   = Long.parseLong(parts[1]);
-        Long shiftId = Long.parseLong(parts[2]);
+        UUID empId   = UUID.fromString(parts[1]);
+        UUID shiftId = UUID.fromString(parts[2]);
         long issuedAt = Long.parseLong(parts[3]);
 
         if (Instant.now().getEpochSecond() - issuedAt > 300) {
@@ -550,8 +550,8 @@ public class HRTelegramBot extends TelegramLongPollingBot {
 
     private void handleConfirmCheckout(long chatId, int messageId, String data) throws TelegramApiException {
         String[] parts = data.split(":");
-        Long empId   = Long.parseLong(parts[1]);
-        Long shiftId = Long.parseLong(parts[2]);
+        UUID empId   = UUID.fromString(parts[1]);
+        UUID shiftId = UUID.fromString(parts[2]);
         long issuedAt = Long.parseLong(parts[3]);
 
         // Nút hết hạn sau 5 phút

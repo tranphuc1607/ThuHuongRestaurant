@@ -5,6 +5,8 @@ import com.example.restaurant_common.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.util.UUID;
+
 @Entity
 @Table(name = "inventory_imports", indexes = {
         @Index(name = "idx_import_ingredient_id", columnList = "ingredient_id")
@@ -13,8 +15,8 @@ import lombok.*;
 public class InventoryImport extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ingredient_id", nullable = false)

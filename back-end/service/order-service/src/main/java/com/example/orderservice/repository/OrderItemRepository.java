@@ -10,12 +10,13 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
+import java.util.UUID;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 
 @Repository
-public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
+public interface OrderItemRepository extends JpaRepository<OrderItem, UUID> {
 
     // Đọc danh sách pending — KHÔNG lock, outer scheduler không giữ tx
     @Query("SELECT i FROM OrderItem i JOIN FETCH i.order o WHERE i.inventoryDeducted = false " +
@@ -26,7 +27,7 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
     // Lock từng item riêng lẻ bên trong REQUIRES_NEW transaction của helper
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT i FROM OrderItem i WHERE i.id = :id")
-    java.util.Optional<OrderItem> findByIdForUpdate(@Param("id") Long id);
+    java.util.Optional<OrderItem> findByIdForUpdate(@Param("id") UUID id);
 
     @Query("SELECT i.productName, SUM(i.quantity) FROM OrderItem i JOIN i.order o " +
            "WHERE o.createdAt BETWEEN :from AND :to AND o.status != 'CANCELLED' " +

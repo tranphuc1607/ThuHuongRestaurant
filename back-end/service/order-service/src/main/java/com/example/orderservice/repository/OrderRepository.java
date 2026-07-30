@@ -15,9 +15,10 @@ import org.springframework.stereotype.Repository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
-public interface OrderRepository extends JpaRepository<Order, Long> {
+public interface OrderRepository extends JpaRepository<Order, UUID> {
 
     @Query("SELECT o FROM Order o JOIN FETCH o.diningTable LEFT JOIN FETCH o.items WHERE o.diningTable = :table AND o.status IN :statuses")
     Optional<Order> findByDiningTableAndStatusIn(@Param("table") DiningTable table, @Param("statuses") List<OrderStatus> statuses);
@@ -37,7 +38,13 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     Page<Order> findAll(Pageable pageable);
 
     @Query("SELECT o FROM Order o LEFT JOIN FETCH o.diningTable LEFT JOIN FETCH o.items WHERE o.id = :id")
-    Optional<Order> findByIdWithItemsAndTable(@Param("id") Long id);
+    Optional<Order> findByIdWithItemsAndTable(@Param("id") UUID id);
+
+    @Query("SELECT o FROM Order o LEFT JOIN FETCH o.diningTable WHERE o.createdAt BETWEEN :from AND :to")
+    Page<Order> findByCreatedAtBetween(@Param("from") Instant from, @Param("to") Instant to, Pageable pageable);
+
+    @Query("SELECT o FROM Order o LEFT JOIN FETCH o.diningTable WHERE o.status = :status AND o.createdAt BETWEEN :from AND :to")
+    Page<Order> findByStatusAndCreatedAtBetween(@Param("status") OrderStatus status, @Param("from") Instant from, @Param("to") Instant to, Pageable pageable);
 
     @Query("SELECT o.status, COUNT(o) FROM Order o WHERE o.createdAt BETWEEN :from AND :to GROUP BY o.status")
     List<Object[]> countByStatusBetween(@Param("from") Instant from, @Param("to") Instant to);
@@ -48,5 +55,5 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     // Xóa vật lý — bypass @SQLDelete + @Version (dùng cho đơn 0 món)
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = "DELETE FROM orders WHERE id = :id", nativeQuery = true)
-    void physicalDeleteById(@Param("id") Long id);
+    void physicalDeleteById(@Param("id") UUID id);
 }

@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.UUID;
 
 @Slf4j
 @Component
@@ -24,7 +25,7 @@ public class InventoryDeductionHelper {
     // REQUIRES_NEW: mỗi item là 1 transaction độc lập
     // Nếu 1 item fail → chỉ rollback item đó, không ảnh hưởng items đã deduct trước
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void deductSingleItem(Long itemId) {
+    public void deductSingleItem(UUID itemId) {
         // Pessimistic lock trên từng item — ngăn race condition với removeItem/cancelOrder
         // Dùng findByIdForUpdate thay vì findById để tránh deadlock với outer scheduler
         OrderItem item = orderItemRepository.findByIdForUpdate(itemId).orElse(null);

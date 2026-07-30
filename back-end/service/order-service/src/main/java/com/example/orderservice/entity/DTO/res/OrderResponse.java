@@ -7,6 +7,7 @@ import lombok.Data;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 
@@ -14,8 +15,8 @@ import java.util.stream.Collectors;
 @Builder
 public class OrderResponse {
 
-    private Long id;
-    private Long tableId;
+    private UUID id;
+    private UUID tableId;
     private String tableName;
     private Integer tableNumber;
     private String tableQrToken;

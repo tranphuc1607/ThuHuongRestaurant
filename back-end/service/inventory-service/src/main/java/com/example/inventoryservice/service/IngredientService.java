@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -37,7 +38,7 @@ public class IngredientService {
                 .stream().map(IngredientResponse::from).collect(Collectors.toList());
     }
 
-    public IngredientResponse getById(Long id) throws MessageException {
+    public IngredientResponse getById(UUID id) throws MessageException {
         return ingredientRepository.findById(id)
                 .map(IngredientResponse::from)
                 .orElseThrow(() -> new MessageException("Không tìm thấy nguyên liệu với id: " + id));
@@ -56,7 +57,7 @@ public class IngredientService {
     }
 
     @Transactional
-    public IngredientResponse update(Long id, IngredientUpdateRequest req) throws MessageException {
+    public IngredientResponse update(UUID id, IngredientUpdateRequest req) throws MessageException {
         Ingredient ingredient = ingredientRepository.findById(id)
                 .orElseThrow(() -> new MessageException("Không tìm thấy nguyên liệu với id: " + id));
 
@@ -70,14 +71,14 @@ public class IngredientService {
     }
 
     @Transactional
-    public void deactivate(Long id) throws MessageException {
+    public void deactivate(UUID id) throws MessageException {
         Ingredient ingredient = ingredientRepository.findById(id)
                 .orElseThrow(() -> new MessageException("Không tìm thấy nguyên liệu với id: " + id));
         ingredientRepository.delete(ingredient); // @SQLDelete sẽ set is_active = false
     }
 
     @Transactional
-    public void activate(Long id) throws MessageException {
+    public void activate(UUID id) throws MessageException {
         int updated = ingredientRepository.activateById(id);
         if (updated == 0) throw new MessageException("Không tìm thấy nguyên liệu với id: " + id);
     }

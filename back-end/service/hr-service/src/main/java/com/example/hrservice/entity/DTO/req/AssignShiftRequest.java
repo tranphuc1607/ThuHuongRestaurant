@@ -7,15 +7,16 @@ import lombok.Data;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 
 @Data
 public class AssignShiftRequest {
 
     @NotNull(message = "Nhân viên không được để trống")
-    private Long employeeId;
+    private UUID employeeId;
 
     @NotNull(message = "Ca làm việc không được để trống")
-    private Long shiftId;
+    private UUID shiftId;
 
     @NotEmpty(message = "Vui lòng chọn ít nhất một ngày trong tuần")
     private List<DayOfWeek> daysOfWeek;

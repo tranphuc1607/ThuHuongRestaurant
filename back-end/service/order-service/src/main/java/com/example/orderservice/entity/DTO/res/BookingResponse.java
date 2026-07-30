@@ -8,18 +8,19 @@ import lombok.Data;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Data
 @Builder
 public class BookingResponse {
 
-    private Long id;
+    private UUID id;
     private String bookingCode;
     private String customerName;
     private String customerPhone;
     private String customerBankAccount;
-    private Long tableId;
+    private UUID tableId;
     private String tableName;
     private Instant scheduledTime;
     private Integer guestCount;

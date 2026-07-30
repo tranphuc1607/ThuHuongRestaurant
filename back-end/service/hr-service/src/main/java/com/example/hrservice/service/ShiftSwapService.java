@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.*;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -36,7 +37,7 @@ public class ShiftSwapService {
      * Nếu < 1 tiếng → ném exception, nhân viên phải liên hệ admin sửa thủ công.
      */
     @Transactional
-    public ShiftChangeRequest requestSwap(Long employeeId, Long requestedShiftId) throws MessageException {
+    public ShiftChangeRequest requestSwap(UUID employeeId, UUID requestedShiftId) throws MessageException {
         Employee employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new MessageException("Không tìm thấy nhân viên"));
 
@@ -81,19 +82,19 @@ public class ShiftSwapService {
         return swapRepository.save(request);
     }
 
-    public Optional<ShiftChangeRequest> findApprovedForToday(Long employeeId) {
+    public Optional<ShiftChangeRequest> findApprovedForToday(UUID employeeId) {
         return swapRepository.findByEmployeeIdAndRequestDateAndStatus(
                 employeeId, LocalDate.now(VN_ZONE), SwapStatus.APPROVED);
     }
 
     // Danh sách ca có thể đổi sang (tất cả ca active trừ ca hiện tại)
-    public List<Shift> getAvailableShifts(Long currentShiftId) {
+    public List<Shift> getAvailableShifts(UUID currentShiftId) {
         return shiftRepository.findByActiveTrue().stream()
                 .filter(s -> !s.getId().equals(currentShiftId))
                 .collect(Collectors.toList());
     }
 
-    public ShiftChangeRequest findById(Long id) throws MessageException {
+    public ShiftChangeRequest findById(UUID id) throws MessageException {
         return swapRepository.findById(id)
                 .orElseThrow(() -> new MessageException("Yêu cầu đổi ca không tìm thấy"));
     }

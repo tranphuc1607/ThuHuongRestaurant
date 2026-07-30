@@ -36,7 +36,9 @@ services:
     image: rabbitmq:3-management
     container_name: rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-rabbitmq}
+      # Default phải khớp default của SPRING_RABBITMQ_USERNAME ở các service, nếu không
+      # thì clone về mà chưa có .env sẽ tạo broker user khác với user client dùng để đăng nhập.
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-thuhuong_mq}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-rabbitmq_secure_2024}
     # 5672 và 15672 không expose ra host — chỉ internal services cần
     healthcheck:
@@ -190,7 +192,7 @@ services:
       discovery-server:
         condition: service_healthy
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/order_db?allowPublicKeyRetrieval=true&useSSL=false
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/order_db?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
       - SPRING_DATASOURCE_USERNAME=order_user
       - SPRING_DATASOURCE_PASSWORD=order_pass_2024
       - SPRING_CONFIG_IMPORT=configserver:http://config-server:8888
@@ -201,6 +203,10 @@ services:
       - BOOKING_TELEGRAM_BOT_TOKEN=${BOOKING_TELEGRAM_BOT_TOKEN}
       - BOOKING_TELEGRAM_BOT_USERNAME=${BOOKING_TELEGRAM_BOT_USERNAME}
       - BOOKING_TELEGRAM_ADMIN_IDS=${BOOKING_TELEGRAM_ADMIN_IDS}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.5-flash-lite}
+      - GEMINI_THINKING_BUDGET=${GEMINI_THINKING_BUDGET:-128}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
     networks:
       - microservice-network
 
@@ -216,7 +222,7 @@ services:
       discovery-server:
         condition: service_healthy
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/payment_db?allowPublicKeyRetrieval=true&useSSL=false
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/payment_db?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
       - SPRING_DATASOURCE_USERNAME=payment_user
       - SPRING_DATASOURCE_PASSWORD=payment_pass_2024
       - SPRING_CONFIG_IMPORT=configserver:http://config-server:8888
@@ -288,9 +294,16 @@ services:
         condition: service_healthy
       config-server:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     environment:
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
       - SPRING_CONFIG_IMPORT=configserver:http://config-server:8888
+      # Gateway có spring-cloud-starter-bus-amqp nên vẫn kết nối RabbitMQ dù không nhận message
+      # nghiệp vụ nào; thiếu 3 dòng này nó rơi về guest/guest và retry ACCESS_REFUSED vô hạn.
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_USERNAME=${RABBITMQ_USER:-thuhuong_mq}
+      - SPRING_RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-rabbitmq_secure_2024}
     networks:
       - microservice-network
 

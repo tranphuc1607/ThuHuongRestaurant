@@ -10,8 +10,8 @@ import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 
 import java.util.ArrayList;
-
 import java.util.List;
+import java.util.UUID;
 
 @Entity
 @Table(name = "orders", indexes = {
@@ -29,20 +29,25 @@ import java.util.List;
 public class Order extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "table_id", nullable = false)
+    @JoinColumn(name = "table_id", nullable = true)
     private DiningTable diningTable;
 
+    // @OrderBy: không có thì thứ tự do DB quyết định, mỗi lần đọc có thể khác nhau. Nhân viên đối
+    // chiếu đơn với tờ hoá đơn giấy (nhất là các đợt bia) nên cần đúng thứ tự đã nhập.
+    // created_at là datetime(6) nên đủ chính xác để không bị trùng.
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @BatchSize(size = 20)
+    @OrderBy("createdAt ASC")
     @Builder.Default
     private List<OrderItem> items = new ArrayList<>();
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
     @BatchSize(size = 20)
+    @OrderBy("createdAt ASC")
     @Builder.Default
     private List<OrderSurcharge> surcharges = new ArrayList<>();
 

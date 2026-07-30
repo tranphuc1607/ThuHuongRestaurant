@@ -25,6 +25,7 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 @Slf4j
@@ -155,10 +156,10 @@ public class BookingAdminBot extends TelegramLongPollingBot {
             }
 
             if (data.startsWith("CONFIRM_BOOKING:")) {
-                Long id = Long.parseLong(data.split(":")[1]);
+                UUID id = UUID.fromString(data.split(":")[1]);
                 handleConfirmBooking(chatId, messageId, id);
             } else if (data.startsWith("CANCEL_BOOKING:")) {
-                Long id = Long.parseLong(data.split(":")[1]);
+                UUID id = UUID.fromString(data.split(":")[1]);
                 handleCancelBooking(chatId, messageId, id);
             }
         } catch (Exception e) {
@@ -170,7 +171,7 @@ public class BookingAdminBot extends TelegramLongPollingBot {
         }
     }
 
-    private void handleConfirmBooking(long chatId, int messageId, Long bookingId) throws Exception {
+    private void handleConfirmBooking(long chatId, int messageId, UUID bookingId) throws Exception {
         try {
             Booking b = bookingRepository.findById(bookingId).orElseThrow(
                     () -> new MessageException("Không tìm thấy booking #" + bookingId));
@@ -191,7 +192,7 @@ public class BookingAdminBot extends TelegramLongPollingBot {
         }
     }
 
-    private void handleCancelBooking(long chatId, int messageId, Long bookingId) throws Exception {
+    private void handleCancelBooking(long chatId, int messageId, UUID bookingId) throws Exception {
         try {
             bookingService.cancelBooking(bookingId, "ADMIN_BOT", "Hủy bởi quản lý qua Telegram");
             Booking b = bookingRepository.findById(bookingId).orElse(null);

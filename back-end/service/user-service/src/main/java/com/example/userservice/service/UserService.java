@@ -19,6 +19,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.UUID;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -88,7 +90,7 @@ public class UserService {
                 .map(UserResponse::from);
     }
 
-    public UserResponse getUserById(Long id) throws MessageException {
+    public UserResponse getUserById(UUID id) throws MessageException {
         return userRepository.findById(id)
                 .map(UserResponse::from)
                 .orElseThrow(() -> new MessageException("Không tìm thấy người dùng với id: " + id));
@@ -121,7 +123,7 @@ public class UserService {
     }
 
     @Transactional
-    public UserResponse updateRole(Long id, UpdateRoleRequest req) throws MessageException {
+    public UserResponse updateRole(UUID id, UpdateRoleRequest req) throws MessageException {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new MessageException("Không tìm thấy người dùng với id: " + id));
 
@@ -147,7 +149,7 @@ public class UserService {
     }
 
     @Transactional
-    public UserResponse toggleStatus(Long id) throws MessageException {
+    public UserResponse toggleStatus(UUID id) throws MessageException {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new MessageException("Không tìm thấy người dùng với id: " + id));
         user.setEnabled(!user.isEnabled());
@@ -155,7 +157,7 @@ public class UserService {
     }
 
     @Transactional
-    public void deleteUser(Long id) throws MessageException {
+    public void deleteUser(UUID id) throws MessageException {
         if (!userRepository.existsById(id)) {
             throw new MessageException("Không tìm thấy người dùng với id: " + id);
         }

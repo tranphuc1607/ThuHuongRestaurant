@@ -4,6 +4,8 @@ import com.example.restaurant_common.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.util.UUID;
+
 @Entity
 @Table(name = "order_surcharges", indexes = {
         @Index(name = "idx_surcharge_order", columnList = "order_id")
@@ -16,8 +18,8 @@ import lombok.*;
 public class OrderSurcharge extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id", nullable = false)

@@ -5,11 +5,13 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.util.UUID;
+
 @Data
 public class StockDeductionManualRequest {
 
     @NotNull(message = "ID nguyên liệu không được để trống")
-    private Long ingredientId;
+    private UUID ingredientId;
 
     @NotNull(message = "Số lượng xuất không được để trống")
     @DecimalMin(value = "0.0001", message = "Số lượng xuất phải lớn hơn 0")

@@ -7,15 +7,16 @@ import lombok.Data;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.UUID;
 
 @Data
 @Builder
 public class AttendanceResponse {
 
-    private Long id;
-    private Long employeeId;
+    private UUID id;
+    private UUID employeeId;
     private String employeeName;
-    private Long shiftId;
+    private UUID shiftId;
     private String shiftName;
     private LocalTime shiftStartTime;
     private Instant checkInTime;
@@ -32,9 +33,9 @@ public class AttendanceResponse {
                 .id(a.getId())
                 .employeeId(a.getEmployee().getId())
                 .employeeName(a.getEmployee().getName())
-                .shiftId(a.getShift().getId())
-                .shiftName(a.getShift().getName())
-                .shiftStartTime(a.getShift().getStartTime())
+                .shiftId(a.getShift() != null ? a.getShift().getId() : null)
+                .shiftName(a.getShift() != null ? a.getShift().getName() : null)
+                .shiftStartTime(a.getShift() != null ? a.getShift().getStartTime() : null)
                 .checkInTime(a.getCheckInTime())
                 .checkOutTime(a.getCheckOutTime())
                 .workDate(a.getWorkDate())

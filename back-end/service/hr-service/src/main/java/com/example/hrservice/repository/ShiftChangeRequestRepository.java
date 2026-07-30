@@ -9,15 +9,16 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
-public interface ShiftChangeRequestRepository extends JpaRepository<ShiftChangeRequest, Long> {
+public interface ShiftChangeRequestRepository extends JpaRepository<ShiftChangeRequest, UUID> {
 
     @EntityGraph(attributePaths = {"employee", "originalShift", "requestedShift"})
-    Optional<ShiftChangeRequest> findByEmployeeIdAndRequestDateAndStatus(Long employeeId, LocalDate date, SwapStatus status);
+    Optional<ShiftChangeRequest> findByEmployeeIdAndRequestDateAndStatus(UUID employeeId, LocalDate date, SwapStatus status);
 
     @EntityGraph(attributePaths = {"employee", "originalShift", "requestedShift"})
-    Optional<ShiftChangeRequest> findById(Long id);
+    Optional<ShiftChangeRequest> findById(UUID id);
 
     List<ShiftChangeRequest> findByStatusOrderByCreatedAtDesc(SwapStatus status);
 }

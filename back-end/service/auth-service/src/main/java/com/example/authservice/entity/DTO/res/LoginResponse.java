@@ -3,11 +3,12 @@ package com.example.authservice.entity.DTO.res;
 import lombok.Builder;
 import lombok.Data;
 
+import java.util.UUID;
+
 @Data
 @Builder
 public class LoginResponse {
     private String accessToken;
-    // refreshToken được gửi qua HttpOnly cookie, không trả trong body để tránh JS đọc được
     private String tokenType;
     private Long expiresIn;
 
@@ -16,7 +17,7 @@ public class LoginResponse {
     @Data
     @Builder 
     public static class UserInfo {
-        private Long id;
+        private UUID id;
         private String username;
         private String role;
     }

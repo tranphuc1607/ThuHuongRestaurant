@@ -18,6 +18,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 public class ProductService {
@@ -34,7 +36,7 @@ public class ProductService {
     }
 
     @Cacheable(value = "product", key = "#id")
-    public ProductResponse getProductById(Long id) throws MessageException {
+    public ProductResponse getProductById(UUID id) throws MessageException {
         return productRepository.findByIdAndIsDeletedFalse(id)
                 .map(ProductResponse::from)
                 .orElseThrow(() -> new MessageException("Không tìm thấy sản phẩm với id: " + id));
@@ -60,7 +62,7 @@ public class ProductService {
             @CacheEvict(value = "product", key = "#id")
     })
     @Transactional
-    public ProductResponse updateProduct(Long id, ProductUpdateRequest request) throws MessageException {
+    public ProductResponse updateProduct(UUID id, ProductUpdateRequest request) throws MessageException {
         Product product = productRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new MessageException("Không tìm thấy sản phẩm với id: " + id));
 
@@ -80,7 +82,7 @@ public class ProductService {
             @CacheEvict(value = "product", key = "#id")
     })
     @Transactional
-    public ProductResponse updateStatus(Long id, ProductStatus status) throws MessageException {
+    public ProductResponse updateStatus(UUID id, ProductStatus status) throws MessageException {
         Product product = productRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new MessageException("Không tìm thấy sản phẩm với id: " + id));
         product.setStatus(status);
@@ -92,7 +94,7 @@ public class ProductService {
             @CacheEvict(value = "product", key = "#id")
     })
     @Transactional
-    public void deleteProduct(Long id) throws MessageException {
+    public void deleteProduct(UUID id) throws MessageException {
         Product product = productRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new MessageException("Không tìm thấy sản phẩm với id: " + id));
         productRepository.delete(product);

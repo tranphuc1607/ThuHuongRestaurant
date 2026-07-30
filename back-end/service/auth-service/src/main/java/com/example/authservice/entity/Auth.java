@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.DynamicUpdate;
 
+import java.util.UUID;
+
 @Entity
 @Table(name = "auth")
 @Getter
@@ -15,8 +17,8 @@ import org.hibernate.annotations.DynamicUpdate;
 public class Auth {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @Column(unique = true, nullable = false)
     private String username;

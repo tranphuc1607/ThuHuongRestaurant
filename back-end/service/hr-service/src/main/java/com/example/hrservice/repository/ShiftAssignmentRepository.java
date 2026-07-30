@@ -9,9 +9,10 @@ import org.springframework.stereotype.Repository;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 
 @Repository
-public interface ShiftAssignmentRepository extends JpaRepository<ShiftAssignment, Long> {
+public interface ShiftAssignmentRepository extends JpaRepository<ShiftAssignment, UUID> {
 
     // Tìm ca hôm nay cho một nhân viên (dùng trong bot /checkin)
     @Query("SELECT sa FROM ShiftAssignment sa JOIN FETCH sa.shift " +
@@ -20,7 +21,7 @@ public interface ShiftAssignmentRepository extends JpaRepository<ShiftAssignment
            "AND sa.active = true " +
            "AND sa.effectiveFrom <= :today " +
            "AND (sa.effectiveTo IS NULL OR sa.effectiveTo >= :today)")
-    List<ShiftAssignment> findActiveByEmployeeAndDay(@Param("employeeId") Long employeeId,
+    List<ShiftAssignment> findActiveByEmployeeAndDay(@Param("employeeId") UUID employeeId,
                                                       @Param("dayOfWeek") DayOfWeek dayOfWeek,
                                                       @Param("today") LocalDate today);
 
@@ -30,14 +31,14 @@ public interface ShiftAssignmentRepository extends JpaRepository<ShiftAssignment
            "AND sa.shift.id = :shiftId " +
            "AND sa.dayOfWeek = :dayOfWeek " +
            "AND sa.active = true")
-    List<ShiftAssignment> findDuplicate(@Param("employeeId") Long employeeId,
-                                        @Param("shiftId") Long shiftId,
+    List<ShiftAssignment> findDuplicate(@Param("employeeId") UUID employeeId,
+                                        @Param("shiftId") UUID shiftId,
                                         @Param("dayOfWeek") DayOfWeek dayOfWeek);
 
     // Toàn bộ phân ca đang active của một nhân viên
     @Query("SELECT sa FROM ShiftAssignment sa JOIN FETCH sa.shift " +
            "WHERE sa.employee.id = :employeeId AND sa.active = true ORDER BY sa.dayOfWeek")
-    List<ShiftAssignment> findActiveByEmployee(@Param("employeeId") Long employeeId);
+    List<ShiftAssignment> findActiveByEmployee(@Param("employeeId") UUID employeeId);
 
     // Tất cả phân ca active có overlap với một tuần [weekStart, weekEnd]
     @Query("SELECT sa FROM ShiftAssignment sa JOIN FETCH sa.shift JOIN FETCH sa.employee " +
@@ -54,7 +55,7 @@ public interface ShiftAssignmentRepository extends JpaRepository<ShiftAssignment
            "AND sa.active = true " +
            "AND sa.effectiveFrom <= :weekEnd " +
            "AND (sa.effectiveTo IS NULL OR sa.effectiveTo >= :weekStart)")
-    List<ShiftAssignment> findActiveByEmployeeForWeek(@Param("employeeId") Long employeeId,
+    List<ShiftAssignment> findActiveByEmployeeForWeek(@Param("employeeId") UUID employeeId,
                                                        @Param("weekStart") LocalDate weekStart,
                                                        @Param("weekEnd") LocalDate weekEnd);
 }

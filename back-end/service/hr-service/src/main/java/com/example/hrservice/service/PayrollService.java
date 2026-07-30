@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -30,7 +31,7 @@ public class PayrollService {
     }
 
     // Lương của một nhân viên
-    public PayrollResponse calculateOne(Long employeeId, int month, int year) throws MessageException {
+    public PayrollResponse calculateOne(UUID employeeId, int month, int year) throws MessageException {
         Employee employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new MessageException("Không tìm thấy nhân viên"));
         return calculate(employee, month, year);

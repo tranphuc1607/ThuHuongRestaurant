@@ -3,11 +3,12 @@ package com.example.orderservice.entity.DTO.req;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.util.UUID;
+
 @Data
 public class CreateOrderRequest {
 
-    @NotNull(message = "ID bàn không được để trống")
-    private Long tableId;
+    private UUID tableId; // nullable — cho phép tạo đơn không gắn bàn (quét hóa đơn viết tay)
 
     private String note;
 

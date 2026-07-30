@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/hr/shifts")
@@ -29,7 +30,7 @@ public class ShiftController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ShiftResponse> getById(@PathVariable Long id) throws MessageException {
+    public ResponseEntity<ShiftResponse> getById(@PathVariable UUID id) throws MessageException {
         return ResponseEntity.ok(shiftService.getById(id));
     }
 
@@ -39,13 +40,13 @@ public class ShiftController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<ShiftResponse> update(@PathVariable Long id,
+    public ResponseEntity<ShiftResponse> update(@PathVariable UUID id,
                                                  @RequestBody @Valid CreateShiftRequest req) throws MessageException {
         return ResponseEntity.ok(shiftService.update(id, req));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Map<String, String>> deactivate(@PathVariable Long id) throws MessageException {
+    public ResponseEntity<Map<String, String>> deactivate(@PathVariable UUID id) throws MessageException {
         shiftService.deactivate(id);
         return ResponseEntity.ok(Map.of("message", "Đã vô hiệu hóa ca làm"));
     }
@@ -56,7 +57,7 @@ public class ShiftController {
     }
 
     @GetMapping("/assignments")
-    public ResponseEntity<List<ShiftAssignmentResponse>> getAssignments(@RequestParam Long employeeId) {
+    public ResponseEntity<List<ShiftAssignmentResponse>> getAssignments(@RequestParam UUID employeeId) {
         return ResponseEntity.ok(shiftService.getAssignments(employeeId));
     }
 
@@ -67,20 +68,20 @@ public class ShiftController {
     }
 
     @DeleteMapping("/assignments/{assignmentId}")
-    public ResponseEntity<Map<String, String>> cancelAssignment(@PathVariable Long assignmentId) throws MessageException {
+    public ResponseEntity<Map<String, String>> cancelAssignment(@PathVariable UUID assignmentId) throws MessageException {
         shiftService.cancelAssignment(assignmentId);
         return ResponseEntity.ok(Map.of("message", "Đã hủy phân ca"));
     }
 
     @DeleteMapping("/assignments/employee/{employeeId}")
-    public ResponseEntity<Map<String, Object>> clearEmployeeAssignments(@PathVariable Long employeeId) throws MessageException {
+    public ResponseEntity<Map<String, Object>> clearEmployeeAssignments(@PathVariable UUID employeeId) throws MessageException {
         int count = shiftService.clearAllAssignments(employeeId);
         return ResponseEntity.ok(Map.of("message", "Đã xóa toàn bộ lịch làm", "count", count));
     }
 
     @DeleteMapping("/assignments/employee/{employeeId}/week")
     public ResponseEntity<Map<String, Object>> clearEmployeeWeekAssignments(
-            @PathVariable Long employeeId,
+            @PathVariable UUID employeeId,
             @RequestParam(defaultValue = "0") int weekOffset) throws MessageException {
         int count = shiftService.clearWeekAssignments(employeeId, weekOffset);
         return ResponseEntity.ok(Map.of("message", "Đã xóa lịch tuần", "count", count));

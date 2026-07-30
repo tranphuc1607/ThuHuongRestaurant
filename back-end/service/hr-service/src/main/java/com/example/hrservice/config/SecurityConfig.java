@@ -36,8 +36,12 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // verify endpoint: nhan vien bam nut, khong co JWT
+                // verify endpoint: nhân viên bấm nút check-in/out trong Telegram (không có JWT)
                 .requestMatchers(HttpMethod.GET, "/api/v1/hr/verify").permitAll()
+                // face-checkin: kiosk nhận dạng khuôn mặt (không có JWT, IP check trong service)
+                .requestMatchers(HttpMethod.POST, "/api/v1/hr/face-checkin").permitAll()
+                // face-descriptors: kiosk tải danh sách descriptor khi khởi động (không có JWT)
+                .requestMatchers(HttpMethod.GET, "/api/v1/hr/employees/face-descriptors").permitAll()
                 .requestMatchers(publicUrls).permitAll()
                 .anyRequest().authenticated()
             )
